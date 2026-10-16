@@ -6,6 +6,10 @@ import { Pool } from "pg";
 const { readFileSync } = process.getBuiltinModule("node:fs");
 
 import { newsletterSchema } from "./newsletter-schema";
+import {
+  DatabaseConfigurationError,
+  databaseSetupRequired,
+} from "./deployment";
 
 type Row = Record<string, unknown>;
 let sqlite: DatabaseSync | undefined;
@@ -31,10 +35,7 @@ CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT 
 `;
 
 function local(): DatabaseSync {
-  if (process.env.VERCEL)
-    throw new Error(
-      "Configurer DATABASE_URL sur Vercel ; SQLite local nécessite un disque persistant.",
-    );
+  if (process.env.VERCEL) throw new DatabaseConfigurationError();
   if (!sqlite) {
     mkdirSync(dataDir(), { recursive: true, mode: 0o700 });
     sqlite = new DatabaseSync(join(dataDir(), "evento.sqlite"));
@@ -70,6 +71,7 @@ export async function query<T = Row>(
   sql: string,
   values: unknown[] = [],
 ): Promise<T[]> {
+  if (databaseSetupRequired()) throw new DatabaseConfigurationError();
   if (process.env.DATABASE_URL) {
     postgres ??= new Pool({
       connectionString: process.env.DATABASE_URL,

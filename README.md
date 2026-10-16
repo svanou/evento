@@ -62,7 +62,12 @@ Une seule livraison par édition et abonné. La clé d’idempotence et le conte
 
 Le projet est une application **Next.js**, pas un export statique. `vercel.json` déclare le framework et la commande de build. Dans Vercel, choisir le dossier contenant `package.json`, **Framework Preset: Next.js** et **retirer l’override Output Directory `public`**. Garder la sortie automatique Next.js. Un dossier `public` vide ne résout pas cette erreur.
 
-Vercel nécessite `DATABASE_URL` vers PostgreSQL persistant : SQLite sur son système de fichiers éphémère est refusé. Appliquer, dans cet ordre, avec le rôle de migration :
+Vercel nécessite `DATABASE_URL` vers PostgreSQL persistant : SQLite sur son système de fichiers éphémère est refusé.
+
+Si les logs indiquent `DATABASE_URL_MISSING` ou « Configurer DATABASE_URL sur Vercel » : dans Supabase, ouvrir **Connect** et récupérer l’URI PostgreSQL avec le mot de passe de la base (pas la clé API publique). Dans **Vercel → Settings → Environment Variables**, ajouter `DATABASE_URL` pour l’environnement du déploiement concerné (**Production** ou **Preview**). Appliquer les migrations ci-dessous, puis lancer **Redeploy** : un déploiement existant ne reçoit pas rétroactivement les nouvelles variables. Ne pas publier cette URI dans Git ou dans les logs.
+
+Tant que cette configuration manque, la page affiche une indisponibilité sans événement ni inscription, avec indexation désactivée. `/api/health` répond **503** avec le code `DATABASE_URL_MISSING`. Ce message d’attente ne remplace pas la connexion à la base.
+ Appliquer, dans cet ordre, avec le rôle de migration :
 
 1. `supabase/migrations/001_initial.sql` si elle n’a pas déjà été appliquée.
 2. `supabase/migrations/002_zone_newsletters.sql`.

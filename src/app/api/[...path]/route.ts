@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { query } from "@/lib/db";
+import { DatabaseConfigurationError } from "@/lib/deployment";
 import {
   signupSchema,
   editSchema,
@@ -362,6 +363,14 @@ async function handle(req: NextRequest) {
     }
     return NextResponse.json({ error: "Route introuvable" }, { status: 404 });
   } catch (e) {
+    if (e instanceof DatabaseConfigurationError)
+      return NextResponse.json(
+        {
+          error: "Le service est momentanément indisponible.",
+          code: "DATABASE_URL_MISSING",
+        },
+        { status: 503 },
+      );
     if (e instanceof z.ZodError)
       return NextResponse.json(
         {
