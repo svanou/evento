@@ -1,3 +1,4 @@
+import { dispatchDue } from "../src/lib/delivery";
 import { initialize, closeDb } from "../src/lib/db";
 import { processOne, schedule } from "../src/lib/jobs";
 await initialize();
@@ -9,7 +10,9 @@ process.on("SIGTERM", () => {
   running = false;
 });
 let lastScheduled = 0;
-console.log("Worker Evento démarré. Aucun envoi d’email automatique.");
+console.log(
+  "Worker Evento démarré. Les envois nécessitent une activation explicite du fournisseur.",
+);
 do {
   try {
     if (
@@ -19,6 +22,7 @@ do {
       await schedule();
       lastScheduled = Date.now();
     }
+    await dispatchDue();
     const worked = await processOne();
     if (process.argv.includes("--once")) break;
     if (!worked) await new Promise((resolve) => setTimeout(resolve, 1000));

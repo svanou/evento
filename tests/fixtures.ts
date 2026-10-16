@@ -1,61 +1,54 @@
-import { randomUUID } from "node:crypto";
-import { type Profile, type Candidate, weekendFor } from "../src/lib/domain";
-import { DemoDiscovery } from "../src/lib/providers";
-export const now = new Date("2026-10-09T06:00:00Z");
-export function profile(overrides: Partial<Profile> = {}): Profile {
+// Synthetic records for automated tests ONLY. Never imported by application code.
+import { DateTime } from "luxon";
+import { type Candidate, type Zone, type Weekend } from "../src/lib/domain";
+import { type DiscoveryProvider } from "../src/lib/providers";
+export const now = new Date("2026-10-16T06:00:00Z");
+export const testZone: Zone = {
+  id: "pays-de-gex",
+  name: "Pays de Gex",
+  country: "FR",
+  timezone: "Europe/Paris",
+  currency: "EUR",
+  language: "fr",
+  status: "active",
+  send_day: 4,
+  send_hour: 8,
+};
+export function candidate(overrides: Partial<Candidate> = {}): Candidate {
   return {
-    id: randomUUID(),
-    email: `${randomUUID()}@example.test`,
-    origin: "Gex",
-    country: "FR",
-    timezone: "Europe/Paris",
-    language: "fr",
-    group: "family",
-    adults: 2,
-    childrenAges: [5, 8],
-    interests: ["nature", "culture", "créativité"],
-    availability: ["sat-am", "sat-pm", "sun-am", "sun-pm"],
-    budget: 40,
-    currency: "EUR",
-    preferFree: true,
-    transport: [{ mode: "transit", maxMinutes: 30 }],
-    crossBorder: true,
-    stroller: false,
-    accessible: false,
-    setting: "any",
-    consent: true,
-    revision: 1,
-    zone: "gex-geneva",
-    confirmedAt: null,
-    unsubscribedAt: null,
-    trialUsed: 0,
-    subscription: "trial",
-    createdAt: now.getTime(),
+    id: "test-only-event",
+    zone: "pays-de-gex",
+    title: "Test de sélection",
+    description: "Donnée utilisée uniquement par les tests automatiques.",
+    date: "2026-10-17",
+    time: null,
+    place: "Lieu du test",
+    category: "culture",
+    price: "Tarif non renseigné",
+    free: null,
+    organizerAge: null,
+    booking: "unknown",
+    sourceUrl: "https://example.org/tests/event",
+    sourceLabel: "Source du test",
+    sourceExcerpt: "Extrait de test.",
+    sourceYear: 2026,
+    checkedAt: now.toISOString(),
+    fictitious: false,
+    conflict: false,
+    occurrenceConfirmed: true,
     ...overrides,
   };
 }
-export async function candidates(): Promise<Candidate[]> {
-  const list = await new DemoDiscovery().discover(
-    "gex-geneva",
-    weekendFor(now, "Europe/Paris"),
-    AbortSignal.timeout(1000),
-  );
-  return list.map((c) => ({
-    ...c,
-    evidence: c.evidence.map((e) => ({ ...e, checkedAt: now.toISOString() })),
-  }));
-}
-export function preferences(p = profile()) {
-  const {
-    id,
-    revision,
-    zone,
-    confirmedAt,
-    unsubscribedAt,
-    trialUsed,
-    subscription,
-    createdAt,
-    ...input
-  } = p;
-  return input;
+export class TestDiscovery implements DiscoveryProvider {
+  constructor(private clock = now) {}
+  async discover(zone: Zone, weekend: Weekend): Promise<Candidate[]> {
+    return [
+      candidate({
+        zone: zone.id,
+        date: weekend.saturday,
+        sourceYear: Number(weekend.saturday.slice(0, 4)),
+        checkedAt: this.clock.toISOString(),
+      }),
+    ];
+  }
 }

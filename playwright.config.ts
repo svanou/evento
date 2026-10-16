@@ -1,4 +1,7 @@
 import { defineConfig } from "@playwright/test";
+// Separate database, no worker and no external providers in browser tests.
+const directory = process.env.EVENTO_E2E_DATA_DIR || `.data/e2e-${Date.now()}`;
+process.env.EVENTO_E2E_DATA_DIR = directory;
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
@@ -15,34 +18,21 @@ export default defineConfig({
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: [
-    {
-      command: "npm run dev -- --port 3100",
-      url: "http://127.0.0.1:3100/api/health",
-      reuseExistingServer: false,
-      timeout: 120000,
-      env: {
-        APP_URL: "http://127.0.0.1:3100",
-        APP_MODE: "demo",
-        DEMO_REFERENCE_DATE: "2026-10-09T06:00:00Z",
-        DATA_DIR: ".data/e2e",
-        DATABASE_URL: "",
-        DEMO_ADMIN_PASSWORD: "evento-e2e-password",
-        NEXT_TELEMETRY_DISABLED: "1",
-      },
+  webServer: {
+    command: "npm run dev -- --port 3100",
+    url: "http://127.0.0.1:3100/api/health",
+    reuseExistingServer: false,
+    timeout: 120000,
+    env: {
+      APP_URL: "http://127.0.0.1:3100",
+      DATA_DIR: directory,
+      DATABASE_URL: "",
+      ADMIN_AUTH_MODE: "local",
+      DEV_ADMIN_PASSWORD: "evento-e2e-only",
+      SESSION_SECRET: "e2e-isolated-environment-secret-32-chars",
+      EMAIL_MODE: "disabled",
+      OPENAI_API_KEY: "",
+      NEXT_TELEMETRY_DISABLED: "1",
     },
-    {
-      command: "npm run worker",
-      wait: { stdout: /Worker Evento démarré/ },
-      timeout: 30000,
-      env: {
-        APP_URL: "http://127.0.0.1:3100",
-        APP_MODE: "demo",
-        DEMO_REFERENCE_DATE: "2026-10-09T06:00:00Z",
-        DATA_DIR: ".data/e2e",
-        DATABASE_URL: "",
-        SCHEDULER_ENABLED: "false",
-      },
-    },
-  ],
+  },
 });

@@ -3,40 +3,41 @@ export default function Privacy() {
     <article className="prose">
       <p className="eyebrow">VOS DONNÉES & VOS CHOIX</p>
       <h1>
-        Juste ce qu’il faut
+        Votre email.
         <br />
-        pour vous proposer mieux.
+        Votre zone. C’est tout.
       </h1>
       <p>
-        Cette version est une démonstration locale. Utilisez un email fictif et
-        des préférences fictives. Aucun email n’est envoyé, aucun paiement n’est
-        activé, aucune donnée n’est transmise à une IA.
+        Evento prépare une newsletter gratuite commune aux lecteurs d’une zone.
+        Nous ne demandons plus d’âges, de composition de famille, de budget ou
+        de préférences de déplacement.
       </p>
-      <h2>Ce qui est enregistré</h2>
+      <h2>Ce qui est conservé</h2>
       <p>
-        Email, point de départ approximatif, préférences renseignées, accord
-        pour les éditions, sélections, preuves, retours et historique technique
-        des tentatives. Pas de nom d’enfant, d’adresse précise ni d’inférence
-        personnelle.
+        Votre email, votre zone, votre consentement, votre confirmation
+        d’adresse et l’historique technique des diffusions. Les sources et les
+        éditions sont partagées par zone ; elles ne contiennent pas de profil
+        lecteur.
       </p>
-      <h2>Vous contrôlez la suite</h2>
+      <h2>Votre contrôle</h2>
       <p>
-        Vos préférences sont modifiables depuis votre espace. Les liens de
-        gestion sont temporaires. La désinscription arrête les futures
-        préparations. La suppression efface votre profil et toutes les données
-        liées dans la base active.
+        La désinscription exclut votre adresse des futures diffusions. La
+        suppression efface votre abonnement et ses données liées dans la base
+        active. Les éditions communes restent disponibles pour les autres
+        lecteurs.
       </p>
-      <h2>Cache partagé</h2>
+      <h2>Partenaires locaux</h2>
       <p>
-        Seules les fiches fictives d’une zone et d’une période sont réutilisées.
-        Les profils et leurs préférences ne sont jamais placés dans ce cache.
+        Un encart sponsorisé peut financer une édition. Il est identifié «
+        Publicité — partenaire local » et séparé de la sélection éditoriale. Les
+        données individuelles des lecteurs ne sont pas transmises aux
+        annonceurs.
       </p>
-      <h2>Avant une ouverture réelle</h2>
+      <h2>Avant l’ouverture des inscriptions</h2>
       <p>
-        La couverture réelle, les fournisseurs externes, la politique de
-        conservation des sauvegardes et les informations du responsable de
-        traitement devront être configurés et validés. Cette démonstration n’est
-        pas un service publiquement ouvert.
+        Le responsable de traitement, les durées de conservation et la gestion
+        des sauvegardes devront être précisés. Les anciens profils personnalisés
+        ne sont pas automatiquement réinscrits dans le nouveau format.
       </p>
     </article>
   );

@@ -1,201 +1,244 @@
-import { test, expect } from "@playwright/test";
-import { preferences } from "../fixtures";
+import { test, expect, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { DateTime } from "luxon";
+import { candidate, testZone } from "../fixtures";
+import { query, closeDb } from "../../src/lib/db";
+import { subscribe, enqueue } from "../../src/lib/store";
+import { newToken } from "../../src/lib/security";
+import { buildEdition } from "../../src/lib/pipeline";
+import { weekendFor } from "../../src/lib/domain";
 const origin = "http://127.0.0.1:3100";
-
-test("onboarding → préparation worker → aperçu → confirmation → retour → désinscription", async ({
+process.env.DATA_DIR = process.env.EVENTO_E2E_DATA_DIR!;
+process.env.DATABASE_URL = "";
+process.env.SESSION_SECRET = "e2e-isolated-environment-secret-32-chars";
+test.afterAll(async () => {
+  await closeDb();
+});
+async function login(page: Page) {
+  await page.goto("/admin");
+  await page
+    .getByLabel("Mot de passe", { exact: true })
+    .fill("evento-e2e-only");
+  await page.getByRole("button", { name: /Ouvrir/ }).click();
+  await expect(
+    page.getByRole("tab", { name: "Zones", exact: true }),
+  ).toBeVisible();
+}
+test("accueil réel, inscription fermée sans email et protection des routes", async ({
   page,
+  request,
+}) => {
+  await page.goto("/");
+  await expect(page).toHaveURL(/agenda-pays-de-gex/);
+  await expect(
+    page.getByRole("heading", { name: /Le week-end/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/SORTIE FICTIVE|24 €|Remplir un profil/),
+  ).toHaveCount(0);
+  await page
+    .getByRole("link", { name: /Recevoir la newsletter gratuite/ })
+    .click();
+  await expect(page.getByLabel("Adresse email")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /M’inscrire gratuitement/ }),
+  ).toBeDisabled();
+  await expect(page.getByText(/inscriptions ouvrent bientôt/)).toBeVisible();
+  expect((await request.get("/api/admin/data")).status()).toBe(401);
+  expect((await request.get("/api/me")).status()).toBe(401);
+  expect(
+    (
+      await request.post("/api/signup", {
+        headers: { origin: "https://evil.example" },
+        data: {
+          email: "test@example.test",
+          zone: "pays-de-gex",
+          consent: true,
+        },
+      })
+    ).status(),
+  ).toBe(403);
+  const signup = await request.post("/api/signup", {
+    headers: { origin },
+    data: { email: "test@example.test", zone: "pays-de-gex", consent: true },
+  });
+  expect(signup.status()).toBe(400);
+  expect((await query("SELECT * FROM subscribers")).length).toBe(0);
+});
+test("ajouter une zone, ses sources et sa page depuis le backend", async ({
+  page,
+}) => {
+  const slug = `test-${randomUUID().slice(0, 8)}`;
+  await login(page);
+  await page.getByRole("tab", { name: "Zones", exact: true }).click();
+  await page.getByLabel("Nom de la zone").fill("Zone du test navigateur");
+  await page.getByLabel("Identifiant de page").fill(slug);
+  await page
+    .getByRole("button", { name: "Créer la zone en brouillon" })
+    .click();
+  await expect(
+    page.getByRole("button", { name: /Zone du test navigateur/ }),
+  ).toBeVisible();
+  expect((await page.request.get(`/agenda-${slug}`)).status()).toBe(404);
+  await page
+    .getByRole("combobox", { name: "Zone de travail" })
+    .selectOption(slug);
+  await page.getByRole("tab", { name: "Sources", exact: true }).click();
+  await page.getByLabel("Nom", { exact: true }).fill("Source du test");
+  await page
+    .getByLabel("Adresse de l’agenda")
+    .fill("https://example.org/test-source");
+  await page.getByRole("button", { name: "Enregistrer la source" }).click();
+  await expect(
+    page.getByRole("button", { name: /Source du test/ }),
+  ).toBeVisible();
+  await page.getByRole("tab", { name: "Zones", exact: true }).click();
+  await page.getByRole("button", { name: /Zone du test navigateur/ }).click();
+  await page.getByLabel("Statut", { exact: true }).selectOption("active");
+  await page.getByRole("button", { name: "Enregistrer la zone" }).click();
+  await expect(page.getByRole("status")).toBeVisible();
+  await page.goto(`/agenda-${slug}`);
+  await expect(
+    page.getByText(/ZONE DU TEST NAVIGATEUR · LA NEWSLETTER/),
+  ).toBeVisible();
+  await page.goto(`/inscription?zone=${slug}`);
+  await expect(page.getByLabel("Votre zone", { exact: true })).toHaveValue(
+    slug,
+  );
+});
+test("revue, aperçu, approbation et abonnement sans aucun envoi externe", async ({
+  page,
+  context,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto("/");
+  // Fixtures only enter the isolated E2E database; product code has no seed events.
+  const current = new Date();
+  const future = DateTime.fromJSDate(current).plus({ days: 14 }).toJSDate();
+  const weekend = weekendFor(future, testZone.timezone);
+  const edition = await enqueue(testZone.id, future);
+  const content = buildEdition(
+    testZone,
+    weekend,
+    [
+      candidate({
+        date: weekend.saturday,
+        sourceYear: Number(weekend.saturday.slice(0, 4)),
+        checkedAt: current.toISOString(),
+      }),
+    ],
+    current,
+  );
+  await query(
+    "UPDATE zone_newsletters SET content=$1,preparation_status='ready' WHERE id=$2",
+    [JSON.stringify(content), edition.id],
+  );
+  const reader = await subscribe(`${randomUUID()}@example.test`, testZone.id);
+  await context.addCookies([
+    {
+      name: "evento_subscriber",
+      value: reader.session,
+      url: origin,
+      httpOnly: true,
+      sameSite: "Lax",
+    },
+  ]);
+  await page.goto("/mon-weekend");
   await expect(
-    page.getByRole("heading", { name: /De belles sorties/ }),
+    page.getByText("Votre zone prépare son prochain rendez-vous."),
   ).toBeVisible();
-  await page.screenshot({
-    path: "test-results/accueil-desktop.png",
-    fullPage: true,
-  });
+  await login(page);
   await page
-    .getByRole("link", { name: /Trouver mes prochaines sorties/ })
-    .click();
-  await page.getByRole("button", { name: "Remplir un profil fictif" }).click();
-  await page.getByRole("button", { name: "Continuer", exact: false }).click();
-  await page.getByRole("button", { name: "Continuer", exact: false }).click();
-  await page.getByRole("button", { name: "Continuer", exact: false }).click();
+    .getByLabel("Objet de l’email")
+    .fill("Objet enregistré par le test");
+  await page.getByLabel(/Ajouter un encart sponsorisé/).check();
+  await page.getByLabel("Nom du partenaire").fill("Partenaire du test");
+  await page.getByLabel("Titre de l’encart").fill("Encart du test");
   await page
-    .getByRole("button", { name: "Préparer mon week-end", exact: false })
+    .getByLabel("Texte de l’encart")
+    .fill("Publicité de test, sans diffusion réelle.");
+  await page
+    .getByLabel("Lien du partenaire")
+    .fill("https://example.org/partner");
+  await page
+    .getByRole("button", { name: "Enregistrer les modifications" })
     .click();
-  await expect(page).toHaveURL(/mon-weekend/);
+  await expect(page.getByText("Version 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Approuver cette version" }).click();
   await expect(
-    page.getByRole("heading", { name: /bonnes raisons de sortir/ }),
-  ).toBeVisible({ timeout: 30000 });
-  await expect(page.getByText("SORTIE FICTIVE").first()).toBeVisible();
-  await page.getByRole("button", { name: /Prévisualiser mon email/ }).click();
+    page.getByRole("button", { name: "Programmer", exact: true }),
+  ).toBeEnabled();
   await expect(
-    page
-      .frameLocator("iframe")
-      .getByRole("heading", { name: /Votre week-end/ }),
-  ).toBeVisible();
+    page.getByRole("button", { name: "Envoyer maintenant" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Prévisualiser l’email" }).click();
   await expect(
-    page
-      .frameLocator("iframe")
-      .getByText(/Événements, sources et trajets fictifs/),
+    page.frameLocator("iframe").getByText("PUBLICITÉ — PARTENAIRE LOCAL"),
   ).toBeVisible();
   await page.getByRole("button", { name: "Texte", exact: true }).click();
   await expect(page.frameLocator("iframe").locator("body")).toContainText(
-    "DÉMONSTRATION",
+    "https://example.org/tests/event",
   );
+  await page.getByRole("button", { name: "Programmer", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Annuler la programmation" }),
+  ).toBeVisible();
+  await page.getByLabel("Objet de l’email").fill("Version à relire");
   await page
-    .getByRole("button", { name: "Obtenir le lien de confirmation" })
+    .getByRole("button", { name: "Enregistrer les modifications" })
     .click();
-  await page
-    .getByRole("link", { name: /Ouvrir le lien de confirmation/ })
-    .click();
+  await expect(page.getByText("Version 3", { exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Programmer", exact: true }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Approuver cette version" }).click();
+  await expect(
+    page.getByRole("button", { name: "Programmer", exact: true }),
+  ).toBeEnabled();
+  await context.clearCookies({ name: "evento_admin" });
+  await page.goto("/mon-weekend");
+  await expect(
+    page.getByRole("heading", { name: "Version à relire" }),
+  ).toBeVisible();
+  const token = await newToken(reader.subscriber!.id, "confirm", 60000);
+  await page.goto(`/lien/confirm#token=${token}`);
   await page.getByRole("button", { name: "Confirmer mon adresse" }).click();
   await expect(page.getByRole("status")).toContainText("confirmée");
-  await page.getByRole("link", { name: "Mon espace" }).click();
+  await page.goto("/mon-weekend");
   await expect(
-    page.getByText("Adresse confirmée en démonstration"),
+    page.getByText("Adresse confirmée", { exact: true }),
   ).toBeVisible();
-  await page
-    .getByRole("button", { name: "Trop loin", exact: true })
-    .first()
-    .click();
-  await expect(page.getByRole("status")).toContainText("Réduisez votre durée");
-  await page.screenshot({
-    path: "test-results/selection-desktop.png",
-    fullPage: true,
-  });
-  await page.getByRole("link", { name: /Ajuster mes préférences/ }).click();
-  await page.getByRole("textbox", { name: /Commune, quartier/ }).fill("Cessy");
-  for (let i = 0; i < 3; i++)
-    await page.getByRole("button", { name: /Continuer/ }).click();
-  await page
-    .getByRole("button", { name: /Enregistrer mes préférences/ })
-    .click();
-  await expect(page.getByText(/Cessy · En famille/)).toBeVisible();
   await page
     .getByRole("button", { name: "Me désinscrire", exact: true })
     .click();
   await expect(page.getByRole("status")).toContainText("Vous êtes désinscrit");
   await page
-    .getByRole("button", { name: "Supprimer mon profil", exact: true })
+    .getByRole("button", { name: "Supprimer mes données", exact: true })
     .click();
   await page.getByRole("button", { name: "Confirmer la suppression" }).click();
-  await expect(page).toHaveURL(origin + "/");
+  await expect(page).toHaveURL(/agenda-pays-de-gex/);
+  expect(
+    await query("SELECT * FROM subscribers WHERE id=$1", [
+      reader.subscriber!.id,
+    ]),
+  ).toHaveLength(0);
+  expect(
+    await query("SELECT * FROM zone_newsletters WHERE id=$1", [edition.id]),
+  ).toHaveLength(1);
+  expect(await query("SELECT * FROM newsletter_deliveries")).toHaveLength(0);
   expect(errors).toEqual([]);
 });
-
-test("isolation HTTP entre utilisateurs, protections admin et CSRF", async ({
-  playwright,
-}) => {
-  const alice = await playwright.request.newContext({
-    baseURL: origin,
-    extraHTTPHeaders: { origin },
-  });
-  const bob = await playwright.request.newContext({
-    baseURL: origin,
-    extraHTTPHeaders: { origin },
-  });
-  const anonymous = await playwright.request.newContext({ baseURL: origin });
-  const a = await alice.post("/api/signup", { data: preferences() });
-  const b = await bob.post("/api/signup", { data: preferences() });
-  expect(a.ok()).toBe(true);
-  expect(b.ok()).toBe(true);
-  const aliceProfile = (await a.json()).profile;
-  const bobProfile = (await b.json()).profile;
-  const aMe = await (await alice.get("/api/me")).json();
-  const bMe = await (await bob.get("/api/me")).json();
-  expect(aMe.profile.id).not.toBe(bMe.profile.id);
-  const id = aMe.editions[0].id;
-  const denied = await bob.get(`/api/editions/${id}/email`);
-  expect(denied.status()).toBe(404);
-  expect((await anonymous.get("/api/me")).status()).toBe(401);
-  expect((await alice.get("/api/admin/data")).status()).toBe(401);
-  expect(
-    (
-      await bob.post("/api/feedback", {
-        data: { editionId: id, candidateId: "forest", kind: "known" },
-      })
-    ).ok(),
-  ).toBe(false);
-  expect(
-    (
-      await bob.patch("/api/me", {
-        data: {
-          ...preferences(),
-          email: bobProfile.email,
-          id: aliceProfile.id,
-        },
-      })
-    ).status(),
-  ).toBe(400);
-  expect(
-    (
-      await anonymous.post("/api/signup", {
-        data: preferences(),
-        headers: { origin: "https://evil.example" },
-      })
-    ).status(),
-  ).toBe(403);
-  await alice.delete("/api/me");
-  await bob.delete("/api/me");
-  await alice.dispose();
-  await bob.dispose();
-  await anonymous.dispose();
-});
-
-test("revue protégée et approbation sans envoi", async ({ page, request }) => {
-  const input = preferences();
-  const created = await request.post("/api/signup", {
-    headers: { origin },
-    data: input,
-  });
-  expect(created.ok()).toBe(true);
-  await page.goto("/admin");
-  await page
-    .getByLabel("Mot de passe", { exact: true })
-    .fill("evento-e2e-password");
-  await page.getByRole("button", { name: /Ouvrir l’espace de revue/ }).click();
-  await expect(
-    page.getByRole("heading", { name: "La revue du vendredi." }),
-  ).toBeVisible();
-  await expect(async () => {
-    await page.getByRole("button", { name: /Actualiser/ }).click();
-    await expect(
-      page.getByRole("button", { name: "Approuver la sélection" }),
-    ).toBeVisible();
-  }).toPass({ timeout: 15000 });
-  await page.getByRole("button", { name: "Approuver la sélection" }).click();
-  await expect(page.getByRole("status")).toContainText("Aucun email envoyé");
-  await page.screenshot({
-    path: "test-results/admin-desktop.png",
-    fullPage: true,
-  });
-  await request.delete("/api/me", { headers: { origin } });
-});
-
-test("l’accueil et le formulaire restent utilisables sur mobile", async ({
-  page,
-}) => {
+test("accueil et inscription utilisables sur mobile", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.screenshot({
-    path: "test-results/accueil-mobile.png",
-    fullPage: true,
-  });
   await page
-    .getByRole("link", { name: /Trouver mes prochaines sorties/ })
+    .getByRole("link", { name: /Recevoir la newsletter gratuite/ })
     .click();
   await expect(page.getByLabel("Adresse email")).toBeVisible();
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
-  await page.screenshot({
-    path: "test-results/onboarding-mobile.png",
-    fullPage: true,
-  });
 });

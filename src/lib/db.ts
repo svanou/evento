@@ -2,7 +2,10 @@ import { mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
-import { readFileSync } from "node:fs";
+// A runtime TLS certificate must not become a watched build dependency.
+const { readFileSync } = process.getBuiltinModule("node:fs");
+
+import { newsletterSchema } from "./newsletter-schema";
 
 type Row = Record<string, unknown>;
 let sqlite: DatabaseSync | undefined;
@@ -28,15 +31,28 @@ CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT 
 `;
 
 function local(): DatabaseSync {
+  if (process.env.VERCEL)
+    throw new Error(
+      "Configurer DATABASE_URL sur Vercel ; SQLite local nécessite un disque persistant.",
+    );
   if (!sqlite) {
-    if (process.env.APP_MODE !== "demo" && process.env.APP_MODE)
-      throw new Error("DATABASE_URL requis hors démonstration");
     mkdirSync(dataDir(), { recursive: true, mode: 0o700 });
     sqlite = new DatabaseSync(join(dataDir(), "evento.sqlite"));
     sqlite.exec(
       "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",
     );
     sqlite.exec(schema);
+    sqlite.exec(newsletterSchema);
+    if (
+      !(
+        sqlite.prepare("PRAGMA table_info(newsletter_deliveries)").all() as {
+          name: string;
+        }[]
+      ).some((c) => c.name === "first_attempt_at")
+    )
+      sqlite.exec(
+        "ALTER TABLE newsletter_deliveries ADD COLUMN first_attempt_at BIGINT",
+      );
     // Safe upgrade for early development databases created before payload persistence.
     if (
       !(

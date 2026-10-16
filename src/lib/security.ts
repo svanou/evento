@@ -4,11 +4,14 @@ import {
   randomBytes,
   timingSafeEqual,
 } from "node:crypto";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+// Mutable credentials are runtime files, never dependencies of the dev bundler.
+const { readFileSync, writeFileSync, mkdirSync } =
+  process.getBuiltinModule("node:fs");
 import { join } from "node:path";
 import { dataDir, query } from "./db";
 
-export const demo = () => (process.env.APP_MODE || "demo") === "demo";
+export const localAdmin = () =>
+  process.env.ADMIN_AUTH_MODE === "local" && !process.env.VERCEL;
 export const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 export const randomToken = () => randomBytes(32).toString("base64url");
@@ -18,7 +21,7 @@ export const appUrl = () =>
 export function secret(): string {
   if (process.env.SESSION_SECRET && process.env.SESSION_SECRET.length >= 32)
     return process.env.SESSION_SECRET;
-  if (!demo())
+  if (process.env.VERCEL)
     throw new Error("SESSION_SECRET de 32 caractères minimum requis");
   mkdirSync(dataDir(), { recursive: true, mode: 0o700 });
   const path = join(dataDir(), "session.key");
@@ -39,14 +42,14 @@ export function equal(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(hash(a)), Buffer.from(hash(b)));
 }
 export async function newToken(
-  profileId: string,
+  subscriberId: string,
   purpose: "session" | "confirm" | "manage" | "unsubscribe",
   ttlMs: number,
 ) {
   const raw = randomToken();
   await query(
-    "INSERT INTO tokens(hash,profile_id,purpose,expires_at) VALUES($1,$2,$3,$4)",
-    [hash(raw), profileId, purpose, Date.now() + ttlMs],
+    "INSERT INTO subscriber_tokens(hash,subscriber_id,purpose,expires_at) VALUES($1,$2,$3,$4)",
+    [hash(raw), subscriberId, purpose, Date.now() + ttlMs],
   );
   return raw;
 }
@@ -56,11 +59,11 @@ export async function tokenOwner(
   consume = false,
 ): Promise<string | null> {
   if (!raw || raw.length > 128) return null;
-  const rows = await query<{ profile_id: string }>(
-    `${consume ? "DELETE FROM" : "SELECT profile_id FROM"} tokens WHERE hash=$1 AND purpose=$2 AND expires_at>$3${consume ? " RETURNING profile_id" : ""}`,
+  const rows = await query<{ subscriber_id: string }>(
+    `${consume ? "DELETE FROM" : "SELECT subscriber_id FROM"} subscriber_tokens WHERE hash=$1 AND purpose=$2 AND expires_at>$3${consume ? " RETURNING subscriber_id" : ""}`,
     [hash(raw), purpose, Date.now()],
   );
-  return rows[0]?.profile_id ?? null;
+  return rows[0]?.subscriber_id ?? null;
 }
 export function signAdmin(id: string): string {
   const payload = Buffer.from(
@@ -81,8 +84,8 @@ export function adminId(cookie?: string): string | null {
       return null;
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (data.exp < Date.now()) return null;
-    return demo()
-      ? data.id === "demo-admin"
+    return localAdmin()
+      ? data.id === "local-admin"
         ? data.id
         : null
       : (process.env.ADMIN_USER_IDS || "").split(",").includes(data.id)

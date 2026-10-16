@@ -1,74 +1,73 @@
 import { z } from "zod";
-import { DateTime, IANAZone } from "luxon";
+import { DateTime } from "luxon";
 
-export const interests = [
-  "nature",
-  "culture",
-  "gastronomie",
-  "sport",
-  "créativité",
-  "musique",
-] as const;
-export const modes = ["transit", "walk", "bike", "car"] as const;
-export type Mode = (typeof modes)[number];
-export const modeLabels: Record<Mode, string> = {
-  transit: "transports publics",
-  walk: "à pied",
-  bike: "à vélo",
-  car: "en voiture",
+export type Zone = {
+  id: string;
+  name: string;
+  timezone: string;
+  country: string;
+  currency: string;
+  language: string;
+  status: "draft" | "active";
+  send_day: number;
+  send_hour: number;
 };
-export const slots = ["sat-am", "sat-pm", "sun-am", "sun-pm"] as const;
-export const profileSchema = z
+export const zoneSchema = z
   .object({
-    email: z
-      .email()
-      .max(254)
-      .transform((s) => s.toLowerCase().trim()),
-    origin: z.string().trim().min(2).max(100),
-    country: z.enum(["FR", "CH"]),
+    id: z
+      .string()
+      .regex(/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/)
+      .max(60),
+    name: z.string().trim().min(2).max(100),
     timezone: z
       .string()
-      .refine((s) => IANAZone.isValidZone(s), "Fuseau horaire invalide"),
-    language: z.enum(["fr", "en", "de"]),
-    group: z.enum(["solo", "couple", "friends", "family"]),
-    adults: z.number().int().min(1).max(20),
-    childrenAges: z.array(z.number().int().min(0).max(17)).max(10),
-    interests: z.array(z.enum(interests)).min(1).max(6),
-    availability: z.array(z.enum(slots)).min(1).max(4),
-    budget: z.number().min(0).max(10000),
-    currency: z.enum(["EUR", "CHF"]),
-    preferFree: z.boolean(),
-    transport: z
-      .array(
-        z.object({
-          mode: z.enum(modes),
-          maxMinutes: z.number().int().min(1).max(240),
-        }),
-      )
-      .min(1)
-      .max(4)
-      .refine(
-        (items) => new Set(items.map((x) => x.mode)).size === items.length,
-      ),
-    crossBorder: z.boolean(),
-    stroller: z.boolean(),
-    accessible: z.boolean(),
-    setting: z.enum(["any", "indoor", "outdoor"]),
-    consent: z.literal(true, {
-      error: "Votre accord est nécessaire pour préparer vos éditions.",
-    }),
+      .refine((s) => DateTime.now().setZone(s).isValid, "Fuseau invalide"),
+    country: z.string().regex(/^[A-Z]{2}$/),
+    currency: z.string().regex(/^[A-Z]{3}$/),
+    language: z.literal("fr"),
+    status: z.enum(["draft", "active"]),
+    send_day: z.number().int().min(1).max(5),
+    send_hour: z.number().int().min(0).max(23),
   })
   .strict();
-export type Preferences = z.infer<typeof profileSchema>;
-export type Profile = Preferences & {
+export function safeSourceUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    return (
+      u.protocol === "https:" &&
+      !u.username &&
+      !u.password &&
+      !u.port &&
+      !/^(localhost|.*\.localhost|.*\.local|.*\.internal|\[.*\]|\d+(\.\d+)*)$/i.test(
+        u.hostname,
+      ) &&
+      u.hostname.includes(".")
+    );
+  } catch {
+    return false;
+  }
+}
+export const httpsUrl = z
+  .string()
+  .max(1500)
+  .refine(safeSourceUrl, "Une URL publique HTTPS est requise");
+export const signupSchema = z
+  .object({
+    email: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+    zone: z
+      .string()
+      .regex(/^[a-z][a-z0-9-]*$/)
+      .max(60),
+    consent: z.literal(true, { error: "Votre accord est nécessaire." }),
+  })
+  .strict();
+export type Subscriber = {
   id: string;
-  revision: number;
-  zone: "gex-geneva" | "waiting";
-  confirmedAt: number | null;
-  unsubscribedAt: number | null;
-  trialUsed: number;
-  subscription: "trial" | "active" | "expired";
-  createdAt: number;
+  email: string;
+  zone: string;
+  confirmed_at: number | null;
+  unsubscribed_at: number | null;
+  created_at: number;
 };
 export type Weekend = {
   key: string;
@@ -76,84 +75,6 @@ export type Weekend = {
   sunday: string;
   timezone: string;
 };
-export type Evidence = {
-  url: string;
-  label: string;
-  excerpt: string;
-  checkedAt: string;
-  year: number;
-  fictitious: boolean;
-};
-export type Candidate = {
-  id: string;
-  title: string;
-  start: string;
-  end: string;
-  timezone: string;
-  place: string;
-  country: "FR" | "CH";
-  description: string;
-  interests: string[];
-  price: {
-    amount: number;
-    currency: "EUR" | "CHF";
-    basis: "person" | "group";
-  } | null;
-  organizerAge: { min: number; max: number | null } | null;
-  booking: boolean | null;
-  stroller: boolean | null;
-  accessible: boolean | null;
-  setting: "indoor" | "outdoor" | null;
-  evidence: Evidence[];
-  conflict: boolean;
-  recurringConfirmed: boolean;
-  fictitious: boolean;
-};
-export type Route = {
-  mode: Mode;
-  minutes: number | null;
-  status: "verified" | "simulated" | "unknown";
-  departure: string;
-  checkedAt: string;
-  provider: string;
-  childSuitable: boolean | null;
-};
-export type Assessed = {
-  candidate: Candidate;
-  decision: "selected" | "alternative" | "rejected";
-  reasons: string[];
-  relevance: string;
-  route: Route | null;
-  score: number;
-  totalPrice: number | null;
-  constraintStatus: "verified" | "simulated" | "unverified";
-};
-export type Selection = {
-  items: Assessed[];
-  weekend: Weekend;
-  demo: boolean;
-  metrics: {
-    calls: number;
-    durationMs: number;
-    tokens: number | null;
-    measuredCost: number | null;
-    estimatedCost: number | null;
-    currency: "USD";
-  };
-};
-export type Edition = {
-  id: string;
-  profile_id: string;
-  weekend: string;
-  revision: number;
-  status: "queued" | "processing" | "ready" | "approved" | "failed";
-  data: string | null;
-  error: string | null;
-  created_at: number;
-  updated_at: number;
-};
-
-/** During a weekend, include only future events from that weekend. Monday–Friday: next Saturday. */
 export function weekendFor(now: Date, timezone: string): Weekend {
   const local = DateTime.fromJSDate(now, { zone: timezone });
   if (!local.isValid) throw new Error("Fuseau horaire invalide");
@@ -167,61 +88,134 @@ export function weekendFor(now: Date, timezone: string): Weekend {
     timezone,
   };
 }
-
-export function fridayDue(now: Date, timezone: string): boolean {
-  const local = DateTime.fromJSDate(now, { zone: timezone });
-  return local.weekday === 5 && local.hour >= 8;
-}
-
-export function zoneFor(origin: string, country: string): Profile["zone"] {
-  const key = origin
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .toLowerCase()
-    .trim();
-  const towns: Record<string, string[]> = {
-    FR: [
-      "gex",
-      "ferney-voltaire",
-      "saint-genis-pouilly",
-      "divonne-les-bains",
-      "prevessin-moens",
-      "thoiry",
-      "cessy",
-      "ornex",
-      "segny",
-    ],
-    CH: ["geneve", "geneva", "carouge", "meyrin", "vernier", "lancy"],
-  };
-  return towns[country]?.includes(key) ? "gex-geneva" : "waiting";
-}
-
-export function money(
-  price: Candidate["price"],
-  total?: number | null,
+export function defaultSendAt(
+  weekend: Weekend,
+  zone: Pick<Zone, "send_day" | "send_hour"> = { send_day: 4, send_hour: 8 },
 ): string {
-  if (!price) return "Tarif non renseigné";
-  if (price.amount === 0) return "Gratuit";
-  return new Intl.NumberFormat("fr-FR", {
-    style: "currency",
-    currency: price.currency,
-  }).format(total ?? price.amount);
+  return DateTime.fromISO(weekend.saturday, { zone: weekend.timezone })
+    .minus({ days: 6 - zone.send_day })
+    .set({ hour: zone.send_hour })
+    .toISO()!;
 }
-
-export function safeSourceUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw);
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      !/^(localhost|.*\.localhost|.*\.local|.*\.internal|\[.*\]|\d+(\.\d+)*)$/i.test(
-        url.hostname,
-      ) &&
-      url.hostname.includes(".")
-    );
-  } catch {
-    return false;
-  }
-}
+export const candidateSchema = z
+  .object({
+    id: z.string().min(1).max(100),
+    zone: z.string().min(1).max(80),
+    title: z.string().min(1).max(180),
+    description: z.string().min(1).max(1600),
+    date: z
+      .string()
+      .refine(
+        (s) => /^\d{4}-\d{2}-\d{2}$/.test(s) && DateTime.fromISO(s).isValid,
+        "Date invalide",
+      ),
+    time: z
+      .string()
+      .regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
+      .nullable(),
+    place: z.string().min(1).max(250),
+    category: z.enum(["nature", "culture", "musique", "atelier", "marché"]),
+    price: z.string().min(1).max(250),
+    free: z.boolean().nullable(),
+    organizerAge: z.string().max(250).nullable(),
+    booking: z.enum(["yes", "no", "unknown"]),
+    sourceUrl: httpsUrl,
+    sourceLabel: z.string().min(1).max(180),
+    sourceExcerpt: z.string().min(1).max(2500),
+    sourceYear: z.number().int(),
+    checkedAt: z.iso.datetime({ offset: true }),
+    fictitious: z.boolean(),
+    conflict: z.boolean(),
+    occurrenceConfirmed: z.boolean(),
+  })
+  .strict();
+export type Candidate = z.infer<typeof candidateSchema>;
+export type Review = {
+  candidate: Candidate;
+  decision: "included" | "excluded" | "check";
+  reasons: string[];
+};
+export const sponsorSchema = z
+  .object({
+    name: z.string().trim().min(1).max(120),
+    title: z.string().trim().min(1).max(160),
+    body: z.string().trim().min(1).max(700),
+    url: httpsUrl,
+  })
+  .strict();
+export type Sponsor = z.infer<typeof sponsorSchema>;
+export type Content = {
+  research?: {
+    responseId: string | null;
+    sources: string[];
+    toolCalls: number;
+  };
+  subject: string;
+  introduction: string;
+  articles: Candidate[];
+  sponsor: Sponsor | null;
+  reviews: Review[];
+  metrics: {
+    calls: number;
+    durationMs: number;
+    tokens: number | null;
+    measuredCost: number | null;
+    estimatedCost: number | null;
+  };
+};
+export type Newsletter = {
+  id: string;
+  zone: string;
+  weekend: string;
+  revision: number;
+  preparation_status: "queued" | "processing" | "ready" | "approved" | "failed";
+  send_status:
+    "not_scheduled" | "scheduled" | "blocked" | "sending" | "sent" | "failed";
+  approved_revision: number | null;
+  scheduled_at: number | null;
+  content: string | null;
+  error: string | null;
+  created_at: number;
+  updated_at: number;
+};
+export const editSchema = z
+  .object({
+    revision: z.number().int().positive(),
+    subject: z.string().trim().min(1).max(160),
+    introduction: z.string().trim().min(1).max(2000),
+    articles: z
+      .array(
+        z
+          .object({
+            id: z.string().min(1).max(100),
+            title: z.string().trim().min(1).max(180),
+            description: z.string().trim().min(1).max(1600),
+          })
+          .strict(),
+      )
+      .max(5)
+      .refine(
+        (a) => new Set(a.map((i) => i.id)).size === a.length,
+        "Proposition dupliquée",
+      ),
+    sponsor: sponsorSchema.nullable(),
+  })
+  .strict();
+export type Edit = z.infer<typeof editSchema>;
+export type Source = {
+  id: string;
+  zone: string;
+  name: string;
+  url: string;
+  enabled: number;
+  notes: string;
+  created_at: number;
+};
+export const sourceSchema = z
+  .object({
+    name: z.string().trim().min(1).max(150),
+    url: httpsUrl,
+    notes: z.string().max(1000),
+    enabled: z.boolean(),
+  })
+  .strict();

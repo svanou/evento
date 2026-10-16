@@ -32,7 +32,7 @@ export default function LinkPage({
         purpose === "unsubscribe"
           ? "Vous êtes désinscrit. Aucun nouvel email ne sera envoyé."
           : purpose === "confirm"
-            ? "Votre adresse est confirmée en démonstration."
+            ? "Votre adresse est confirmée."
             : "Votre session de gestion est ouverte.",
       );
     } catch (e) {
@@ -51,7 +51,7 @@ export default function LinkPage({
           ? "Bienvenue dans l’aventure."
           : purpose === "unsubscribe"
             ? "À chacun son rythme."
-            : "Vos envies, vos choix."}
+            : "Votre abonnement, vos choix."}
       </h1>
       <p>Ce lien est sécurisé, temporaire et utilisable une seule fois.</p>
       {!done && (
@@ -66,14 +66,14 @@ export default function LinkPage({
               ? "Confirmer mon adresse"
               : purpose === "unsubscribe"
                 ? "Confirmer ma désinscription"
-                : "Ouvrir mes préférences"}
+                : "Ouvrir mon abonnement"}
         </button>
       )}
       {message && <p role="status">{message}</p>}
       {done && (
         <Link
           className="button secondary"
-          href={purpose === "manage" ? "/preferences" : "/mon-weekend"}
+          href={purpose === "manage" ? "/mon-weekend" : "/mon-weekend"}
         >
           Mon espace →
         </Link>

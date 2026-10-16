@@ -13,10 +13,10 @@ export function Header() {
       <nav aria-label="Navigation principale">
         <Link href="/#comment">Comment ça marche</Link>
         <Link href="/mon-weekend">
-          Mon week-end <span aria-hidden>→</span>
+          Mon abonnement <span aria-hidden>→</span>
         </Link>
         <Link className="nav-admin" href="/admin">
-          Espace de revue
+          Administration
         </Link>
       </nav>
     </header>
@@ -28,18 +28,8 @@ export function Footer() {
       <Logo />
       <span>Moins chercher. Plus sortir.</span>
       <Link href="/confidentialite">Vos données & vos choix</Link>
-      <span className="footer-place">Imaginé pour le Pays de Gex & Genève</span>
+      <span className="footer-place">Première édition : Pays de Gex</span>
     </footer>
-  );
-}
-export function DemoBanner() {
-  return (
-    <div className="demo-banner">
-      <span className="status-dot" /> DÉMONSTRATION LOCALE{" "}
-      <span className="demo-detail">
-        · Événements, sources et trajets fictifs. Aucun email envoyé.
-      </span>
-    </div>
   );
 }
 export function Landscape({ variant = "forest" }: { variant?: string }) {

@@ -1,4 +1,4 @@
-import { Dashboard } from "@/components/dashboard";
+import { redirect } from "next/navigation";
 export default function PreferencesPage() {
-  return <Dashboard editing />;
+  redirect("/mon-weekend");
 }

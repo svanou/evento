@@ -3,165 +3,35 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { DateTime } from "luxon";
 import {
-  type Assessed,
-  type Edition,
-  type Profile,
-  type Selection,
-  money,
-  modeLabels,
+  type Subscriber,
+  type Newsletter,
+  type Content,
+  type Zone,
 } from "@/lib/domain";
-import { Landscape } from "./shell";
-import { Onboarding } from "./onboarding";
-
-export function CandidateCard({
-  item,
-  editionId,
-}: {
-  item: Assessed;
-  editionId?: string;
-}) {
-  const [feedback, setFeedback] = useState("");
-  const c = item.candidate;
-  async function respond(kind: string) {
-    try {
-      const res = await fetch("/api/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editionId, candidateId: c.id, kind }),
-      });
-      const data = await res.json();
-      setFeedback(res.ok ? data.suggestion : data.error);
-    } catch {
-      setFeedback("Connexion interrompue. Réessayez.");
-    }
-  }
-  return (
-    <article className="event-card">
-      <div className={`event-art event-art-${c.interests[0]}`}>
-        <Landscape variant={c.interests[0]} />
-        <span className="fiction-label">SORTIE FICTIVE</span>
-        <span className="event-price">{money(c.price, item.totalPrice)}</span>
-      </div>
-      <div className="event-body">
-        <span className="eyebrow">
-          {DateTime.fromISO(c.start)
-            .setZone(c.timezone)
-            .setLocale("fr")
-            .toFormat("cccc d LLLL · HH:mm")}
-        </span>
-        <h3>{c.title}</h3>
-        <p className="event-place">⌁ {c.place}</p>
-        <p>{c.description}</p>
-        <div className="relevance">✳︎ {item.relevance}</div>
-        <dl className="event-facts">
-          <div>
-            <dt>Trajet</dt>
-            <dd>
-              {item.route?.minutes != null
-                ? `${item.route.minutes} min ${modeLabels[item.route.mode]} — ${item.route.status === "simulated" ? "fictif" : "vérifié"}`
-                : "Non vérifié"}
-            </dd>
-          </div>
-          <div>
-            <dt>Âge organisateur</dt>
-            <dd>
-              {c.organizerAge
-                ? `Dès ${c.organizerAge.min} ans${c.organizerAge.max !== null ? `, jusqu’à ${c.organizerAge.max} ans` : ""}`
-                : "Non précisé"}
-            </dd>
-          </div>
-          <div>
-            <dt>Réservation</dt>
-            <dd>
-              {c.booking === null
-                ? "Non renseignée"
-                : c.booking
-                  ? "Nécessaire · disponibilité inconnue"
-                  : "Non nécessaire selon la fiche fictive"}
-            </dd>
-          </div>
-        </dl>
-        <p className="small-note">
-          {item.constraintStatus === "simulated"
-            ? "Compatibilité simulée. Les contraintes réelles de trajet, d’accès et de budget ne sont pas vérifiées."
-            : item.constraintStatus === "unverified"
-              ? "Contraintes non vérifiées."
-              : "Contraintes vérifiées."}
-          {item.route?.mode === "bike"
-            ? " Itinéraire adapté aux enfants : non vérifié."
-            : ""}
-        </p>
-        <details>
-          <summary>Sources & dernière vérification</summary>
-          {c.evidence.map((e) => (
-            <div className="evidence" key={e.url}>
-              <a href={e.url} target="_blank" rel="noreferrer">
-                {e.label} →
-              </a>
-              <p>{e.excerpt}</p>
-              <small>
-                Vérification {e.fictitious ? "simulée" : ""} le{" "}
-                {DateTime.fromISO(e.checkedAt)
-                  .setLocale("fr")
-                  .toFormat("dd LLL yyyy HH:mm")}
-                . Fuseau de l’événement : {c.timezone}.
-              </small>
-            </div>
-          ))}
-        </details>
-        {editionId && (
-          <div className="feedback">
-            <span>Cette idée vous parle ?</span>
-            <div>
-              {[
-                ["interested", "Ça m’intéresse"],
-                ["not-for-me", "Pas pour moi"],
-                ["too-far", "Trop loin"],
-                ["known", "Déjà connu"],
-              ].map(([kind, text]) => (
-                <button
-                  className="feedback-button"
-                  key={kind}
-                  onClick={() => respond(kind)}
-                >
-                  {text}
-                </button>
-              ))}
-            </div>
-            {feedback && (
-              <p role="status">
-                {feedback} <Link href="/preferences">Mes préférences</Link>
-              </p>
-            )}
-          </div>
-        )}
-      </div>
-    </article>
-  );
-}
-export function Dashboard({ editing = false }: { editing?: boolean }) {
+export function Dashboard() {
   const [data, setData] = useState<{
-    profile: Profile;
-    editions: Edition[];
+    subscriber: Subscriber;
+    zone: Zone;
+    editions: Newsletter[];
+    registrationOpen: boolean;
   } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [link, setLink] = useState("");
-  const [preview, setPreview] = useState<"html" | "text" | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [preview, setPreview] = useState<"html" | "text" | null>(null);
   const load = useCallback(async () => {
     try {
-      const res = await fetch("/api/me");
-      if (res.status === 401) {
+      const r = await fetch("/api/me");
+      if (r.status === 401) {
         setData(null);
         return;
       }
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error);
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.error);
       setData(json);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Connexion interrompue");
+      setError(e instanceof Error ? e.message : "Erreur réseau");
     } finally {
       setLoading(false);
     }
@@ -169,28 +39,21 @@ export function Dashboard({ editing = false }: { editing?: boolean }) {
   useEffect(() => {
     void load();
   }, [load]);
-  const edition = data?.editions.find(
-    (e) => e.revision === data.profile.revision,
-  );
-  useEffect(() => {
-    if (!edition || !["queued", "processing"].includes(edition.status)) return;
-    const timer = setInterval(() => void load(), 1500);
-    return () => clearInterval(timer);
-  }, [edition, load]);
   async function action(path: string, method = "POST") {
+    setError("");
     try {
-      setError("");
       const res = await fetch(`/api/${path}`, { method });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error);
-      if (json.confirmationLink) setLink(json.confirmationLink);
+      if (path === "confirmation")
+        setMessage("Un email de confirmation vous a été envoyé.");
       if (method === "DELETE") {
         window.location.assign("/");
         return;
       }
       if (path === "unsubscribe")
         setMessage(
-          "Vous êtes désinscrit. Aucune nouvelle édition ne sera préparée ni envoyée.",
+          "Vous êtes désinscrit. Aucun nouvel email ne vous sera envoyé.",
         );
       await load();
     } catch (e) {
@@ -200,138 +63,74 @@ export function Dashboard({ editing = false }: { editing?: boolean }) {
   if (loading)
     return (
       <div className="empty-state" role="status">
-        On ouvre votre carnet de week-end…
+        Ouverture de votre abonnement…
       </div>
     );
   if (!data)
     return (
       <div className="empty-state">
-        <p className="eyebrow">TOUT COMMENCE PAR VOS ENVIES</p>
+        <p className="eyebrow">UN EMAIL. VOTRE COIN. C’EST TOUT.</p>
         <h1>
-          Votre prochain week-end
+          Les sorties du week-end,
           <br />
-          vous attend.
+          dans votre boîte.
         </h1>
-        <p>Créez un profil fictif pour découvrir votre première sélection.</p>
-        <Link className="button primary" href="/inscription">
-          Créer mon profil →
+        <p>Inscrivez-vous gratuitement à votre newsletter locale.</p>
+        <Link href="/inscription" className="button primary">
+          M’inscrire →
         </Link>
         {error && <p role="alert">{error}</p>}
       </div>
     );
-  if (editing) {
-    const {
-      email,
-      origin,
-      country,
-      timezone,
-      language,
-      group,
-      adults,
-      childrenAges,
-      interests,
-      availability,
-      budget,
-      currency,
-      preferFree,
-      transport,
-      crossBorder,
-      stroller,
-      accessible,
-      setting,
-      consent,
-    } = data.profile;
-    return (
-      <Onboarding
-        initial={{
-          email,
-          origin,
-          country,
-          timezone,
-          language,
-          group,
-          adults,
-          childrenAges,
-          interests,
-          availability,
-          budget,
-          currency,
-          preferFree,
-          transport,
-          crossBorder,
-          stroller,
-          accessible,
-          setting,
-          consent,
-        }}
-      />
-    );
-  }
-  const p = data.profile;
-  const selection: Selection | null = edition?.data
-    ? JSON.parse(edition.data)
+  const s = data.subscriber;
+  const edition = data.editions[0];
+  const content: Content | null = edition?.content
+    ? JSON.parse(edition.content)
     : null;
-  const selected =
-    selection?.items.filter((i) => i.decision === "selected") || [];
-  const alternatives =
-    selection?.items.filter((i) => i.decision === "alternative") || [];
   return (
     <section className="dashboard">
       <div className="page-heading">
         <div>
-          <p className="eyebrow">VOTRE CARNET DE SORTIES</p>
+          <p className="eyebrow">MON ABONNEMENT · GRATUIT</p>
           <h1>
-            Bonjour, le week-end<span className="orange">.</span>
+            {data.zone.name}
+            <span className="orange">.</span>
           </h1>
           <p>
-            {p.origin} ·{" "}
-            {p.group === "family"
-              ? "En famille"
-              : p.group === "solo"
-                ? "En solo"
-                : p.group === "couple"
-                  ? "À deux"
-                  : "Entre amis"}{" "}
-            · {p.timezone}
+            {s.email} · {data.zone.timezone}
           </p>
         </div>
-        <Link href="/preferences" className="button secondary">
-          Ajuster mes préférences →
+        <Link href={`/agenda-${s.zone}`} className="button secondary">
+          La newsletter de ma zone →
         </Link>
       </div>
       <div className="dashboard-bar">
         <span>
-          <span className="status-dot" />{" "}
-          {p.unsubscribedAt
+          <span className="status-dot" />
+          {s.unsubscribed_at
             ? "Désinscrit"
-            : p.confirmedAt
-              ? "Adresse confirmée en démonstration"
+            : s.confirmed_at
+              ? "Adresse confirmée"
               : "Adresse à confirmer"}
         </span>
-        <span>
-          {4 - p.trialUsed} éditions d’essai restantes · aucun paiement actif
-        </span>
+        <span>Gratuit · financé par des partenaires locaux identifiés</span>
       </div>
-      {!p.confirmedAt && !p.unsubscribedAt && (
+      {!s.confirmed_at && !s.unsubscribed_at && (
         <div className="notice">
           <div>
-            <strong>Un petit clic avant nos prochains rendez-vous.</strong>
-            <p>
-              Confirmez votre adresse pour autoriser les éditions récurrentes.
-              Dans la démo, le lien apparaît ici, sans envoi d’email.
-            </p>
-            {link && (
-              <Link className="inline-link" href={link}>
-                Ouvrir le lien de confirmation de démonstration →
-              </Link>
-            )}
+            <strong>
+              Confirmez votre adresse avant le premier rendez-vous.
+            </strong>
+            <p>Consultez votre email de confirmation.</p>
           </div>
-          <button
-            className="button secondary"
-            onClick={() => action("confirmation")}
-          >
-            Obtenir le lien de confirmation
-          </button>
+          {data.registrationOpen && (
+            <button
+              className="button secondary"
+              onClick={() => action("confirmation")}
+            >
+              Renvoyer la confirmation
+            </button>
+          )}
         </div>
       )}
       {error && (
@@ -344,136 +143,114 @@ export function Dashboard({ editing = false }: { editing?: boolean }) {
           {message}
         </p>
       )}
-      {p.zone === "waiting" ? (
-        <div className="empty-state">
-          <h2>Un peu de patience pour votre point de départ.</h2>
-          <p>
-            Cette zone n’est pas encore reconnue ou suffisamment couverte. Votre
-            profil est enregistré en attente ; aucune couverture réelle n’est
-            promise.
-          </p>
-          <Link href="/preferences" className="button secondary">
-            Modifier mon point de départ
-          </Link>
-        </div>
-      ) : (
+      {content ? (
         <>
-          {(!edition || ["queued", "processing"].includes(edition.status)) &&
-            !p.unsubscribedAt && (
-              <div className="empty-state processing">
-                <span className="loading-flower">✳︎</span>
-                <h2>Votre sélection prend forme.</h2>
-                <p>
-                  La préparation est enregistrée et continue grâce au worker,
-                  même si vous fermez cette page.
-                </p>
-                <small>
-                  Si elle reste en attente, lancez <code>npm run worker</code>{" "}
-                  dans le terminal du projet.
-                </small>
-              </div>
-            )}
-          {edition?.status === "failed" && (
-            <div className="notice error">
-              <strong>La préparation n’a pas abouti.</strong>
-              <p>
-                {edition.error}. Les tentatives sont conservées dans l’espace de
-                revue.
+          <div className="selection-heading">
+            <div>
+              <p className="eyebrow">
+                ÉDITION DU WEEK-END DU{" "}
+                {DateTime.fromISO(edition.weekend)
+                  .setLocale("fr")
+                  .toFormat("d LLLL yyyy")
+                  .toUpperCase()}
               </p>
+              <h2>{content.subject}</h2>
+              <p>La même édition pour tous les lecteurs de {data.zone.name}.</p>
+            </div>
+            <button
+              className="button secondary"
+              onClick={() => setPreview(preview ? null : "html")}
+            >
+              {preview ? "Fermer l’aperçu" : "Voir la newsletter →"}
+            </button>
+          </div>
+          <p>{content.introduction}</p>
+          <div className="steps-grid">
+            {content.articles.map((a, i) => (
+              <article key={a.id}>
+                <span className="step-index">
+                  0{i + 1} · {a.category.toUpperCase()}
+                </span>
+                <h3>{a.title}</h3>
+                <p>{a.description}</p>
+                <p>
+                  {DateTime.fromISO(a.date)
+                    .setLocale("fr")
+                    .toFormat("cccc d LLLL")}{" "}
+                  · {a.time || "Horaire non renseigné"}
+                  <br />
+                  {a.place} · {a.price}
+                </p>
+                <a
+                  href={a.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-button"
+                >
+                  {a.sourceLabel} →
+                </a>
+              </article>
+            ))}
+          </div>
+          {content.sponsor && (
+            <aside className="sponsor-block">
+              <p className="eyebrow">PUBLICITÉ — PARTENAIRE LOCAL</p>
+              <strong>{content.sponsor.name}</strong>
+              <h3>{content.sponsor.title}</h3>
+              <p>{content.sponsor.body}</p>
+              <a href={content.sponsor.url} target="_blank" rel="noreferrer">
+                Découvrir le partenaire →
+              </a>
+            </aside>
+          )}
+          {preview && (
+            <div className="email-preview">
+              <div className="preview-toolbar">
+                <strong>Aperçu · aucun envoi</strong>
+                <div>
+                  <button
+                    aria-pressed={preview === "html"}
+                    onClick={() => setPreview("html")}
+                  >
+                    HTML
+                  </button>
+                  <button
+                    aria-pressed={preview === "text"}
+                    onClick={() => setPreview("text")}
+                  >
+                    Texte
+                  </button>
+                </div>
+              </div>
+              <iframe
+                title="Prévisualisation de la newsletter"
+                sandbox="allow-same-origin allow-top-navigation-by-user-activation"
+                src={`/api/newsletters/${edition.id}/email?format=${preview}`}
+              />
             </div>
           )}
-          {selection && (
-            <>
-              <div className="selection-heading">
-                <div>
-                  <p className="eyebrow">
-                    ÉDITION DU{" "}
-                    {DateTime.fromISO(selection.weekend.saturday)
-                      .setLocale("fr")
-                      .toFormat("d LLLL yyyy")
-                      .toUpperCase()}
-                  </p>
-                  <h2>
-                    {selected.length
-                      ? `${selected.length} bonnes raisons de sortir.`
-                      : "Pas de proposition conforme pour le moment."}
-                  </h2>
-                  <p>
-                    Des idées fictives pour tester vos envies, sans compromis
-                    sur vos contraintes.
-                  </p>
-                </div>
-                <button
-                  className="button secondary"
-                  onClick={() => setPreview(preview ? null : "html")}
-                >
-                  {preview ? "Fermer l’aperçu" : "Prévisualiser mon email →"}
-                </button>
-              </div>
-              {preview && (
-                <div className="email-preview">
-                  <div className="preview-toolbar">
-                    <strong>Aperçu local · aucun envoi</strong>
-                    <div>
-                      <button
-                        aria-pressed={preview === "html"}
-                        onClick={() => setPreview("html")}
-                      >
-                        HTML
-                      </button>
-                      <button
-                        aria-pressed={preview === "text"}
-                        onClick={() => setPreview("text")}
-                      >
-                        Texte
-                      </button>
-                    </div>
-                  </div>
-                  <iframe
-                    title="Prévisualisation de votre email"
-                    sandbox="allow-same-origin allow-top-navigation-by-user-activation"
-                    src={`/api/editions/${edition!.id}/email?format=${preview}`}
-                  />
-                </div>
-              )}
-              <div className="event-grid">
-                {selected.map((item) => (
-                  <CandidateCard
-                    key={item.candidate.id}
-                    item={item}
-                    editionId={edition!.id}
-                  />
-                ))}
-              </div>
-              {alternatives.length > 0 && (
-                <details className="alternatives">
-                  <summary>
-                    {alternatives.length} alternative(s) à vérifier — hors
-                    sélection principale
-                  </summary>
-                  <p>
-                    Ces sorties ne sont pas présentées comme conformes à vos
-                    contraintes.
-                  </p>
-                  {alternatives.map((item) => (
-                    <div className="alternative-row" key={item.candidate.id}>
-                      <strong>{item.candidate.title}</strong>
-                      <span>{item.reasons.join(" · ")}</span>
-                    </div>
-                  ))}
-                </details>
-              )}
-            </>
-          )}
         </>
+      ) : (
+        <div className="empty-state">
+          <h2>Votre zone prépare son prochain rendez-vous.</h2>
+          <p>
+            Votre abonnement est enregistré. L’édition apparaîtra après sa
+            préparation et sa validation éditoriale.
+          </p>
+          <button className="button secondary" onClick={() => void load()}>
+            Actualiser
+          </button>
+        </div>
       )}
       <div className="account-panel">
         <div>
-          <h3>Vos préférences vous appartiennent.</h3>
-          <p>Aucune déduction personnelle cachée. Vous gardez la main.</p>
+          <h3>Votre boîte mail, vos choix.</h3>
+          <p>
+            Nous conservons votre email et votre zone, sans profilage personnel.
+          </p>
         </div>
         <div className="account-actions">
-          {!p.unsubscribedAt && (
+          {!s.unsubscribed_at && (
             <button
               className="text-button"
               onClick={() => action("unsubscribe")}
@@ -485,19 +262,16 @@ export function Dashboard({ editing = false }: { editing?: boolean }) {
             className="text-button danger"
             onClick={() => setDeleting(true)}
           >
-            Supprimer mon profil
+            Supprimer mes données
           </button>
         </div>
       </div>
       {deleting && (
-        <div className="notice error" role="alert">
-          <div>
-            <strong>Supprimer définitivement ce profil et ses données ?</strong>
-            <p>
-              Les sélections, liens de gestion et retours seront également
-              supprimés.
-            </p>
-          </div>
+        <div className="notice error">
+          <p>
+            Supprimer votre abonnement et ses données ? Les éditions communes
+            resteront disponibles pour les autres lecteurs.
+          </p>
           <button
             className="button secondary"
             onClick={() => setDeleting(false)}
