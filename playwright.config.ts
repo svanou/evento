@@ -32,6 +32,8 @@ export default defineConfig({
       SESSION_SECRET: "e2e-isolated-environment-secret-32-chars",
       EMAIL_MODE: "disabled",
       OPENAI_API_KEY: "",
+      SCHEDULER_ENABLED: "false",
+      CRON_SECRET: "e2e-only-cron-secret-at-least-32-characters",
       NEXT_TELEMETRY_DISABLED: "1",
     },
   },

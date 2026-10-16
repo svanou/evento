@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { query } from "./db";
-import { type Content, type Subscriber, type Newsletter } from "./domain";
+import { type Content } from "./domain";
 import { getNewsletter, getSubscriber } from "./store";
 import { getZone } from "./zones";
 import { appUrl, newToken } from "./security";
@@ -9,7 +9,6 @@ import {
   ResendTransport,
   requireRecipient,
   type MailTransport,
-  mailReadiness,
 } from "./mail-transport";
 
 export async function sendConfirmation(
@@ -109,82 +108,5 @@ export async function sendDelivery(
       [randomUUID(), claim.id, error, Date.now()],
     );
     throw e;
-  }
-}
-export async function broadcast(id: string) {
-  const edition = await getNewsletter(id);
-  if (
-    !edition ||
-    edition.preparation_status !== "approved" ||
-    edition.revision !== edition.approved_revision
-  )
-    throw new Error("Approbation requise");
-  await getZone(edition.zone);
-  const subscribers = await query<Subscriber>(
-    "SELECT * FROM subscribers WHERE zone=$1 AND confirmed_at IS NOT NULL AND unsubscribed_at IS NULL",
-    [edition.zone],
-  );
-  if (!subscribers.length)
-    throw new Error("Aucun abonné confirmé dans cette zone");
-  for (const s of subscribers) requireRecipient(s.email); // Fail closed before any partial dispatch in test mode.
-  const claim = await query(
-    "UPDATE zone_newsletters SET send_status='sending',updated_at=$1 WHERE id=$2 AND send_status IN ('not_scheduled','scheduled','blocked','failed') AND revision=$3 AND approved_revision=$3 RETURNING id",
-    [Date.now(), id, edition.revision],
-  );
-  if (!claim.length) throw new Error("Diffusion déjà en cours ou terminée");
-  let sent = 0;
-  let failed = 0;
-  for (const s of subscribers) {
-    try {
-      if ((await sendDelivery(id, s.id)) === "sent") sent++;
-    } catch {
-      failed++;
-    }
-  }
-  const unresolved = (
-    await query(
-      "SELECT id FROM newsletter_deliveries WHERE newsletter_id=$1 AND state<>'sent'",
-      [id],
-    )
-  ).length;
-  await query(
-    "UPDATE zone_newsletters SET send_status=$1,error=$2,updated_at=$3 WHERE id=$4",
-    [
-      failed || unresolved ? "failed" : "sent",
-      failed || unresolved
-        ? "Certains envois n’ont pas abouti ; consulter les tentatives avant reprise."
-        : null,
-      Date.now(),
-      id,
-    ],
-  );
-  return { sent, failed, total: subscribers.length };
-}
-export async function dispatchDue(now = Date.now()) {
-  const readiness = mailReadiness();
-  const due = await query<Newsletter>(
-    "SELECT * FROM zone_newsletters WHERE send_status='scheduled' AND scheduled_at<=$1",
-    [now],
-  );
-  for (const edition of due) {
-    if (
-      !readiness.enabled ||
-      !readiness.keyConfigured ||
-      !readiness.senderConfigured
-    ) {
-      await query(
-        "UPDATE zone_newsletters SET send_status='blocked',error='Échéance atteinte : configurer et activer le fournisseur email pour envoyer.' WHERE id=$1 AND send_status='scheduled'",
-        [edition.id],
-      );
-      continue;
-    }
-    try {
-      await broadcast(edition.id);
-    } catch (e) {
-      await query(
-        "UPDATE zone_newsletters SET send_status='blocked',error=$1 WHERE id=$2 AND send_status='scheduled'",
-        [e instanceof Error ? e.message : "Envoi bloqué", edition.id],
-      );
-    }
   }
 }

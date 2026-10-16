@@ -144,6 +144,7 @@ export async function editNewsletter(id: string, raw: Edit, actor: string) {
   )
     throw new Error("Édition non prête");
   if (
+    edition.dispatch_started_at != null ||
     ["sending", "sent"].includes(edition.send_status) ||
     (await hasDeliveries(id))
   )
@@ -171,7 +172,7 @@ export async function editNewsletter(id: string, raw: Edit, actor: string) {
     sponsor: input.sponsor,
   };
   const changed = await query(
-    "UPDATE zone_newsletters SET content=$1,revision=revision+1,preparation_status='ready',approved_revision=NULL,send_status='not_scheduled',scheduled_at=NULL,updated_at=$2 WHERE id=$3 AND revision=$4 AND send_status NOT IN ('sending','sent') AND NOT EXISTS(SELECT 1 FROM newsletter_deliveries WHERE newsletter_id=$3) RETURNING id",
+    "UPDATE zone_newsletters SET content=$1,revision=revision+1,preparation_status='ready',approved_revision=NULL,send_status='not_scheduled',scheduled_at=NULL,updated_at=$2 WHERE id=$3 AND revision=$4 AND dispatch_started_at IS NULL AND send_status NOT IN ('sending','sent') AND NOT EXISTS(SELECT 1 FROM newsletter_deliveries WHERE newsletter_id=$3) RETURNING id",
     [JSON.stringify(updated), Date.now(), id, input.revision],
   );
   if (!changed.length)
@@ -227,7 +228,7 @@ export async function scheduleNewsletter(
       "Programmez dans le futur, avant le début du week-end de cette édition",
     );
   const changed = await query(
-    "UPDATE zone_newsletters SET send_status='scheduled',scheduled_at=$1,updated_at=$2 WHERE id=$3 AND revision=$4 AND preparation_status='approved' AND approved_revision=$4 AND send_status NOT IN ('sending','sent') AND NOT EXISTS(SELECT 1 FROM newsletter_deliveries WHERE newsletter_id=$3) RETURNING id",
+    "UPDATE zone_newsletters SET send_status='scheduled',scheduled_at=$1,updated_at=$2 WHERE id=$3 AND revision=$4 AND preparation_status='approved' AND approved_revision=$4 AND dispatch_started_at IS NULL AND send_status NOT IN ('sending','sent') AND NOT EXISTS(SELECT 1 FROM newsletter_deliveries WHERE newsletter_id=$3) RETURNING id",
     [time.toMillis(), Date.now(), id, revision],
   );
   if (!changed.length)

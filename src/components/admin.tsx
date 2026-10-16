@@ -35,6 +35,16 @@ type AdminData = {
       keyConfigured: boolean;
       senderConfigured: boolean;
     };
+    automation: {
+      running: boolean;
+      cronConfigured: boolean;
+      schedulingEnabled: boolean;
+      pendingPreparations: number;
+      pendingDispatches: number;
+      last_finished_at?: number | null;
+      last_error?: string | null;
+      migrationRequired?: boolean;
+    };
     research: { keyConfigured: boolean; modelConfigured: boolean };
   };
 };
@@ -85,6 +95,18 @@ export function Admin() {
   useEffect(() => {
     void load();
   }, [load]);
+  const pendingTasks =
+    !!data &&
+    (data.configuration.automation.running ||
+      data.configuration.automation.pendingPreparations > 0 ||
+      data.configuration.automation.pendingDispatches > 0);
+  useEffect(() => {
+    if (!pendingTasks) return;
+    const timer = setInterval(() => {
+      void load();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [pendingTasks, load]);
   const request: Request = async (path, body = {}, method = "POST") => {
     setError("");
     setNotice("");
@@ -99,8 +121,10 @@ export function Admin() {
       if (!res.ok) throw new Error(json.error);
       setNotice(
         path.includes("/send")
-          ? `${json.sent} email(s) envoyé(s), ${json.failed} échec(s).`
-          : "Modification enregistrée.",
+          ? "Diffusion mise en file. Les résultats apparaîtront dans les livraisons."
+          : json.queued
+            ? "Traitement demandé. Les tâches restantes restent enregistrées pour le prochain passage."
+            : "Modification enregistrée.",
       );
       await load();
       return true;
@@ -229,6 +253,63 @@ export function Admin() {
           {notice}
         </p>
       )}
+      <div className="notice">
+        <strong>Traitements automatiques</strong>
+        {data.configuration.automation.migrationRequired ? (
+          <p>
+            Appliquer la migration Supabase 003_vercel_tasks.sql pour activer
+            les traitements.
+          </p>
+        ) : (
+          <>
+            <p>
+              {data.configuration.automation.running
+                ? "Traitement en cours."
+                : "Aucun traitement en cours."}{" "}
+              {data.configuration.automation.pendingPreparations} préparation(s)
+              et {data.configuration.automation.pendingDispatches} diffusion(s)
+              en attente.
+            </p>
+            <p>
+              Sur Hobby : un passage quotidien entre 8 h et 9 h UTC. Une
+              exécution traite au plus une préparation et 50 emails ; les tâches
+              restantes attendent le prochain passage ou un lancement manuel.
+            </p>
+            {!data.configuration.automation.cronConfigured && (
+              <p>
+                Configurer CRON_SECRET dans Vercel (au moins 32 caractères) pour
+                activer le passage automatique.
+              </p>
+            )}
+            <p>
+              {data.configuration.automation.schedulingEnabled
+                ? "Création automatique des brouillons activée."
+                : "Création automatique des brouillons désactivée ; le bouton Préparer reste disponible."}
+            </p>
+            {data.configuration.automation.last_finished_at && (
+              <p>
+                Dernier passage :{" "}
+                {DateTime.fromMillis(
+                  Number(data.configuration.automation.last_finished_at),
+                )
+                  .setZone("Europe/Paris")
+                  .toFormat("dd/LL/yyyy HH:mm")}{" "}
+                (Paris).
+              </p>
+            )}
+            {data.configuration.automation.last_error && (
+              <p role="alert">{data.configuration.automation.last_error}</p>
+            )}
+            <button
+              className="button secondary"
+              disabled={busy || data.configuration.automation.running}
+              onClick={() => request("tasks/run")}
+            >
+              Traiter les tâches en attente
+            </button>
+          </>
+        )}
+      </div>
       {(!mailReady ||
         !Object.values(data.configuration.research).every(Boolean)) && (
         <div className="notice">
@@ -238,7 +319,7 @@ export function Admin() {
             Recherche :{" "}
             {Object.values(data.configuration.research).every(Boolean)
               ? "clé et modèle renseignés, connexion à valider"
-              : "OPENAI_API_KEY et OPENAI_MODEL requis côté worker"}
+              : "OPENAI_API_KEY et OPENAI_MODEL requis dans les variables Vercel"}
             .<br />
             Emails :{" "}
             {mailReady
@@ -345,9 +426,9 @@ export function Admin() {
                     <div className="empty-state">
                       <h2>En attente de contenu réel.</h2>
                       <p>
-                        Le worker prépare le brouillon à partir des sources
-                        actives. Actualisez pour consulter le résultat ou le
-                        motif d’échec.
+                        Le traitement prépare le brouillon à partir des sources
+                        actives. Le résultat ou le motif d’échec apparaîtra
+                        automatiquement.
                       </p>
                     </div>
                   )}
@@ -487,6 +568,7 @@ function EditionEditor({
     setDirty(true);
   }
   const frozen = ["sending", "sent"].includes(edition.send_status);
+  const contentFrozen = frozen || edition.dispatch_started_at != null;
   return (
     <>
       <div className="metrics">
@@ -510,7 +592,7 @@ function EditionEditor({
             maxLength={160}
             value={edit.subject}
             onChange={(e) => change({ ...edit, subject: e.target.value })}
-            disabled={frozen}
+            disabled={contentFrozen}
           />
         </label>
         <label>
@@ -521,10 +603,10 @@ function EditionEditor({
             maxLength={2000}
             value={edit.introduction}
             onChange={(e) => change({ ...edit, introduction: e.target.value })}
-            disabled={frozen}
+            disabled={contentFrozen}
           />
         </label>
-        <fieldset disabled={frozen}>
+        <fieldset disabled={contentFrozen}>
           <legend>Sorties retenues · maximum 5</legend>
           {edit.articles.map((a, index) => {
             const facts = content.reviews.find(
@@ -636,7 +718,7 @@ function EditionEditor({
                   <button
                     type="button"
                     className="text-button"
-                    disabled={frozen}
+                    disabled={contentFrozen}
                     onClick={() =>
                       change({
                         ...edit,
@@ -657,7 +739,7 @@ function EditionEditor({
             </div>
           ))}
         </details>
-        <fieldset disabled={frozen} className="sponsor-block">
+        <fieldset disabled={contentFrozen} className="sponsor-block">
           <legend>Publicité — partenaire local</legend>
           <label className="check-label">
             <input
@@ -737,7 +819,10 @@ function EditionEditor({
             </div>
           )}
         </fieldset>
-        <button className="button primary" disabled={busy || !dirty || frozen}>
+        <button
+          className="button primary"
+          disabled={busy || !dirty || contentFrozen}
+        >
           Enregistrer les modifications
         </button>
         <small>
@@ -749,7 +834,7 @@ function EditionEditor({
       <div className="review-actions">
         <button
           className="button secondary"
-          disabled={busy || dirty || frozen || !edit.articles.length}
+          disabled={busy || dirty || contentFrozen || !edit.articles.length}
           onClick={() =>
             request(`newsletters/${edition.id}/approve`, {
               revision: edition.revision,
@@ -794,7 +879,9 @@ function EditionEditor({
         <h3>Diffusion</h3>
         <p className="small-note">
           Horaire dans le fuseau {zone.timezone}. L’envoi ne partira que si le
-          fournisseur est configuré et activé.
+          fournisseur est configuré et activé. L’heure choisie est une échéance
+          au plus tôt : la diffusion commence au prochain passage quotidien, ou
+          après un lancement manuel des tâches.
         </p>
         {edition.scheduled_at && (
           <p>

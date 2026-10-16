@@ -20,7 +20,8 @@ import {
 } from "../src/lib/store";
 import { getZone, listZones, saveZone } from "../src/lib/zones";
 import { processOne, schedule } from "../src/lib/jobs";
-import { sendDelivery, dispatchDue } from "../src/lib/delivery";
+import { sendDelivery } from "../src/lib/delivery";
+import { queueDue as dispatchDue } from "../src/lib/dispatch";
 import { newToken, tokenOwner } from "../src/lib/security";
 import { type Content, type Edit } from "../src/lib/domain";
 import { TestDiscovery, now, testZone } from "./fixtures";

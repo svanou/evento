@@ -17,14 +17,14 @@ npm run dev
 Ouvrir `http://127.0.0.1:3000`. Dans un second terminal :
 
 ```bash
-npm run worker
+npm run worker # optionnel : traitements locaux automatiques
 ```
 
 Copier `.env.example` vers `.env.local` si ce fichier n’existe pas déjà. Choisir `DEV_ADMIN_PASSWORD` pour l’administration locale (`ADMIN_AUTH_MODE=local`). Ce mode est refusé sur Vercel. Aucune valeur de mot de passe par défaut n’est fournie. L’accès local accepte l’email administrateur vide.
 
 Sans fournisseur email activé, le formulaire indique que les inscriptions ne sont pas encore ouvertes. Aucun lien simulant une confirmation d’adresse n’est proposé. Sans clé de recherche, l’administration reste utilisable pour configurer zones et sources.
 
-SQLite conserve les données dans `.data/evento.sqlite`. La clé `.data/session.key` et la base doivent être conservées entre redémarrages, hors Git. Le site et le worker doivent partager le même stockage, la même configuration et le même `SESSION_SECRET` en hébergement. Ne pas modifier ce secret sans prévoir l’invalidation des sessions et la migration des empreintes d’emails.
+SQLite conserve les données dans `.data/evento.sqlite`. La clé `.data/session.key` et la base doivent être conservées entre redémarrages, hors Git. Le processus local optionnel partage ce stockage et la configuration du site. Sur Vercel, les tâches utilisent directement la même base PostgreSQL et le même `SESSION_SECRET` que le site. Ne pas modifier ce secret sans prévoir l’invalidation des sessions et la migration des empreintes d’emails.
 
 ## Ajouter une zone sans modifier le code
 
@@ -38,7 +38,7 @@ Un seul domaine avec `/agenda-pays-de-gex`, `/agenda-geneve`, etc. mutualise la 
 
 ## Recherche réelle et preuves
 
-Le worker utilise le SDK officiel OpenAI, **Responses avec `web_search`**, `OPENAI_API_KEY` et `OPENAI_MODEL`. Le modèle doit supporter cet outil et les sorties structurées. Le SDK et les exemples officiels Responses ont été consultés lors de l’intégration. L’appel réel reste à valider avec une clé et un modèle configurés.
+Le traitement de préparation utilise le SDK officiel OpenAI, **Responses avec `web_search`**, `OPENAI_API_KEY` et `OPENAI_MODEL`. Le modèle doit supporter cet outil et les sorties structurées. Le SDK et les exemples officiels Responses ont été consultés lors de l’intégration. L’appel réel reste à valider avec une clé et un modèle configurés.
 
 La seule source initiale est celle fournie pour le Pays de Gex : https://www.paysdegex-montsjura.com/agenda-animations/tout-lagenda/. Aucun événement n’en a été importé automatiquement. Ajouter progressivement les sources municipales et associatives vérifiées ; aucun annuaire de sources supposées n’est prérempli.
 
@@ -56,7 +56,7 @@ Après validation et activation explicite, `EMAIL_MODE=production` autorise les 
 
 Une seule livraison par édition et abonné. La clé d’idempotence et le contenu sont conservés après échec. La reprise est limitée à 23 heures après la première tentative, à l’intérieur de la fenêtre d’idempotence de 24 heures annoncée par Resend. Une livraison bloquée en `sending`, ou hors fenêtre de reprise, exige un rapprochement manuel auprès du fournisseur ; ne pas la réinitialiser aveuglément. Un arrêt pendant une diffusion peut laisser cette diffusion en `sending` : même précaution. Un email déjà transmis ne peut pas être rappelé.
 
-`SCHEDULER_ENABLED=true` prépare les éditions à partir de 8 h la veille du jour prévu, avec rattrapage le jour même, dans le fuseau de la zone. Cela ne les approuve pas automatiquement. Le worker distribue également les éditions explicitement programmées. Une échéance sans email configuré devient `blocked` et nécessite une nouvelle action de l’administrateur. La préparation est indépendante du nombre d’abonnés, avec une tâche durable unique par zone/week-end, bail de 120 secondes et reprises bornées.
+`SCHEDULER_ENABLED=true` prépare les éditions à partir de 8 h la veille du jour prévu, avec rattrapage le jour même, dans le fuseau de la zone. Cela ne les approuve pas automatiquement. Le passage Vercel distribue également les éditions explicitement programmées. Une échéance sans email configuré devient `blocked` et nécessite une nouvelle action de l’administrateur. La préparation est indépendante du nombre d’abonnés, avec une tâche durable unique par zone/week-end, bail de 180 secondes et reprises bornées.
 
 ## Vercel et Supabase
 
@@ -70,13 +70,29 @@ Tant que cette configuration manque, la page affiche une indisponibilité sans �
  Appliquer, dans cet ordre, avec le rôle de migration :
 
 1. `supabase/migrations/001_initial.sql` si elle n’a pas déjà été appliquée.
-2. `supabase/migrations/002_zone_newsletters.sql`.
+2. `supabase/migrations/002_zone_newsletters.sql`, si pas encore appliquée.
+3. `supabase/migrations/003_vercel_tasks.sql` : état durable des traitements Vercel et reprise des diffusions. Cette migration est réexécutable.
 
 La deuxième migration est additive : les anciens profils et éditions restent dans leurs tables, mais ne sont ni réinscrits ni affichés dans le nouveau produit. Les tables sont fermées aux accès directs `anon`/`authenticated` par privilèges et RLS. Les routes serveur contrôlent les sessions et l’administration avant d’utiliser PostgreSQL. La suppression d’un abonnement retire ses données liées, pas les éditions communes.
 
 Configurer côté serveur : `DATABASE_URL`, `SESSION_SECRET` aléatoire (32 caractères minimum), `APP_URL` égal à l’origine exacte du site, `ADMIN_AUTH_MODE=supabase`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `ADMIN_USER_IDS` (UUID autorisés). Garder TLS vérifié ; `PGSSLROOTCERT` permet de fournir la CA si nécessaire. Ne jamais coller les secrets dans le chat ou les committer.
 
-**Le worker doit être hébergé séparément**, comme processus persistant avec la même base. Une fonction Vercel ne lance pas automatiquement `npm run worker`. La connexion Supabase, l’authentification distante, OpenAI et Resend doivent être vérifiés dans l’environnement configuré. Aucun déploiement ni envoi réel n’est effectué par les commandes de validation ci-dessous.
+**Vercel + Supabase suffisent : aucun service Railway ni worker permanent nécessaire.** Après les migrations :
+
+- Dans Vercel → Settings → Environment Variables → **Production**, configurer `OPENAI_API_KEY`, `OPENAI_MODEL`, et un `CRON_SECRET` aléatoire distinct d’au moins 32 caractères (génération locale possible : `openssl rand -hex 32`). Aucun de ces secrets ne doit porter le préfixe `NEXT_PUBLIC_`.
+- Pour les emails : `RESEND_API_KEY`, `EMAIL_FROM`, et d’abord `EMAIL_MODE=test` avec `EMAIL_TEST_ALLOWLIST`. Passer explicitement à `production` après validation d’un envoi contrôlé et du domaine expéditeur. Le défaut reste `disabled`.
+- `SCHEDULER_ENABLED=true` active la création automatique des brouillons ; sinon, utiliser **Préparer** dans `/admin`. La relecture et l’approbation restent manuelles.
+- Activer **Fluid Compute** dans les réglages Functions de Vercel pour permettre les fonctions de 300 secondes utilisées ici. Redéployer après tout changement de variables ou réglages. Vérifier dans Vercel → Cron Jobs que `/api/cron/tasks` apparaît.
+
+**Fonctionnement sur Hobby.** `vercel.json` programme un passage par jour (`0 8 * * *`, UTC). Vercel Hobby ne garantit pas la minute : prévoir la fenêtre 8–9 h UTC, soit 10–11 h à Paris en été et 9–10 h en hiver. Une heure de diffusion choisie dans l’administration est une échéance au plus tôt, traitée au prochain passage ; une programmation après cette fenêtre peut donc attendre le lendemain. Aucun email d’une édition périmée n’est envoyé après le début de son week-end.
+
+Les boutons **Préparer**, **Relancer** et **Confirmer l’envoi réel** enregistrent le travail en base, puis déclenchent `after()` sur Vercel après la réponse HTTP. Fermer l’onglet n’annule pas ce traitement. Si un traitement est déjà en cours ou si Vercel l’interrompt, les tâches restantes attendent le prochain Cron ou **Traiter les tâches en attente** dans l’administration. Cette dernière action peut envoyer les éditions déjà programmées dont l’échéance est atteinte ou celles explicitement mises en diffusion ; elle n’approuve aucune édition.
+
+Chaque exécution utilise un budget de 220 secondes, prépare au plus **une édition** et tente au plus **50 livraisons**. La limite peut être inférieure selon le temps consommé. Un bail global de 5 minutes évite deux traitements simultanés entre Cron et actions admin. L’état, les erreurs et les livraisons sont conservés dans Supabase ; les emails déjà envoyés ne sont pas renvoyés. Une livraison laissée en `sending` à l’interruption exige une vérification fournisseur avant reprise, tandis que les lignes encore `queued` restent traitables.
+
+Ce rythme convient au lancement ; plusieurs zones ou plus de 50 destinataires nécessiteront plusieurs lancements manuels, ou une offre permettant des Cron plus fréquents. Sur une offre compatible, modifier la fréquence dans `vercel.json` (par exemple toutes les 5 minutes) et adapter l’indication de cadence dans l’administration. Les quotas Vercel, OpenAI et Resend s’appliquent séparément.
+
+`/api/cron/tasks` refuse l’absence de secret ou un mauvais `Authorization: Bearer …`. Seul le Cron de production est programmé par Vercel. Le serveur local optionnel `npm run worker` utilise les mêmes baux et lots, mais n’est pas requis en production. La connexion Supabase, l’authentification distante, OpenAI et Resend doivent être vérifiés dans l’environnement configuré. Aucun envoi réel n’est effectué par les tests ci-dessous.
 
 Avant l’ouverture publique, compléter les informations du responsable de traitement, les durées de conservation et la gestion des sauvegardes dans la page confidentialité. `SEARCH_INDEXING_ENABLED=true` ouvre l’indexation des pages de zones actives ; elle est désactivée par défaut. Pas de paiement lecteur ni d’intégration Stripe dans ce modèle gratuit.
 
@@ -89,6 +105,6 @@ npm run typecheck
 npm run test:e2e
 ```
 
-Les tests métier utilisent des bases temporaires et des fournisseurs injectés en mémoire. PGlite vérifie les deux migrations, la conservation de l’existant et la RLS sans projet distant. Playwright démarre son serveur sur le port 3100 avec une base distincte `.data/e2e-*`, sans worker ni fournisseur externe ; ses données de test n’entrent jamais dans la base du site. Chromium : `/usr/bin/chromium`, ou définir `PLAYWRIGHT_CHROMIUM_PATH`.
+Les tests métier utilisent des bases temporaires et des fournisseurs injectés en mémoire. PGlite vérifie les trois migrations, la conservation de l’existant et la RLS sans projet distant. Playwright démarre son serveur sur le port 3100 avec une base distincte `.data/e2e-*`, sans worker ni fournisseur externe ; ses données de test n’entrent jamais dans la base du site. Chromium : `/usr/bin/chromium`, ou définir `PLAYWRIGHT_CHROMIUM_PATH`.
 
-Principaux modules : `zones.ts` (zones dynamiques), `store.ts` (abonnements/éditions), `jobs.ts` (préparation), `openai-discovery.ts` (recherche), `pipeline.ts` (sélection), `delivery.ts` (diffusion), `mail-transport.ts` (fournisseur interchangeable), `email.ts` (rendu), et `src/components/admin.tsx` (gestion éditoriale).
+Principaux modules : `zones.ts` (zones dynamiques), `store.ts` (abonnements/éditions), `jobs.ts` (préparation), `openai-discovery.ts` (recherche), `pipeline.ts` (sélection), `automation.ts` (exécution Vercel), `dispatch.ts` (lots durables), `delivery.ts` (livraisons), `mail-transport.ts` (fournisseur interchangeable), `email.ts` (rendu), et `src/components/admin.tsx` (gestion éditoriale).

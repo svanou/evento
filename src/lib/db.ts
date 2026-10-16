@@ -5,6 +5,7 @@ import { Pool } from "pg";
 // A runtime TLS certificate must not become a watched build dependency.
 const { readFileSync } = process.getBuiltinModule("node:fs");
 
+import { automationSchema } from "./automation-schema";
 import { newsletterSchema } from "./newsletter-schema";
 import {
   DatabaseConfigurationError,
@@ -44,6 +45,17 @@ function local(): DatabaseSync {
     );
     sqlite.exec(schema);
     sqlite.exec(newsletterSchema);
+    sqlite.exec(automationSchema);
+    if (
+      !(
+        sqlite.prepare("PRAGMA table_info(zone_newsletters)").all() as {
+          name: string;
+        }[]
+      ).some((c) => c.name === "dispatch_started_at")
+    )
+      sqlite.exec(
+        "ALTER TABLE zone_newsletters ADD COLUMN dispatch_started_at BIGINT",
+      );
     if (
       !(
         sqlite.prepare("PRAGMA table_info(newsletter_deliveries)").all() as {
@@ -76,6 +88,8 @@ export async function query<T = Row>(
     postgres ??= new Pool({
       connectionString: process.env.DATABASE_URL,
       max: 5,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 5000,
       ...(process.env.PGSSLROOTCERT
         ? {
             ssl: {

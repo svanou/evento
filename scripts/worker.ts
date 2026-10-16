@@ -1,6 +1,6 @@
-import { dispatchDue } from "../src/lib/delivery";
+// Optional local runner. Production runs through Vercel after() and Cron.
+import { runAutomation } from "../src/lib/automation";
 import { initialize, closeDb } from "../src/lib/db";
-import { processOne, schedule } from "../src/lib/jobs";
 await initialize();
 let running = true;
 process.on("SIGINT", () => {
@@ -9,33 +9,16 @@ process.on("SIGINT", () => {
 process.on("SIGTERM", () => {
   running = false;
 });
-let lastScheduled = 0;
-console.log(
-  "Worker Evento démarré. Les envois nécessitent une activation explicite du fournisseur.",
-);
 do {
   try {
-    if (
-      process.env.SCHEDULER_ENABLED === "true" &&
-      Date.now() - lastScheduled > 60_000
-    ) {
-      await schedule();
-      lastScheduled = Date.now();
-    }
-    await dispatchDue();
-    const worked = await processOne();
-    if (process.argv.includes("--once")) break;
-    if (!worked) await new Promise((resolve) => setTimeout(resolve, 1000));
-  } catch (error) {
+    await runAutomation({ source: "worker" });
+  } catch {
     console.error(
-      "Worker :",
-      error instanceof Error ? error.message : "erreur inconnue",
+      "Traitement interrompu : vérifier la configuration et les tâches.",
     );
-    if (process.argv.includes("--once")) {
-      process.exitCode = 1;
-      break;
-    }
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+    process.exitCode = 1;
   }
+  if (process.argv.includes("--once")) break;
+  if (running) await new Promise((resolve) => setTimeout(resolve, 10000));
 } while (running);
 await closeDb();

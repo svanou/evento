@@ -171,6 +171,7 @@ export type Newsletter = {
   preparation_status: "queued" | "processing" | "ready" | "approved" | "failed";
   send_status:
     "not_scheduled" | "scheduled" | "blocked" | "sending" | "sent" | "failed";
+  dispatch_started_at: number | null;
   approved_revision: number | null;
   scheduled_at: number | null;
   content: string | null;

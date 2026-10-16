@@ -45,6 +45,15 @@ test("accueil réel, inscription fermée sans email et protection des routes", a
   ).toBeDisabled();
   await expect(page.getByText(/inscriptions ouvrent bientôt/)).toBeVisible();
   expect((await request.get("/api/admin/data")).status()).toBe(401);
+  expect((await request.get("/api/cron/tasks")).status()).toBe(401);
+  expect(
+    (
+      await request.post("/api/admin/tasks/run", {
+        headers: { origin },
+        data: {},
+      })
+    ).status(),
+  ).toBe(401);
   expect((await request.get("/api/me")).status()).toBe(401);
   expect(
     (
@@ -241,4 +250,54 @@ test("accueil et inscription utilisables sur mobile", async ({ page }) => {
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth),
   ).toBeLessThanOrEqual(390);
+});
+
+test("la préparation démarre après la réponse sans worker et reste consultable après fermeture", async ({
+  page,
+}) => {
+  await login(page);
+  await expect(
+    page.getByText("Traitements automatiques", { exact: true }),
+  ).toBeVisible();
+  await page.getByLabel("Date dans la semaine à préparer").fill("2027-06-09");
+  const response = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/admin/prepare") && r.request().method() === "POST",
+  );
+  await page
+    .getByRole("button", { name: "Préparer l’édition", exact: true })
+    .click();
+  const accepted = await response;
+  expect(accepted.status()).toBe(202);
+  const { edition } = await accepted.json();
+  await page.close();
+  await expect
+    .poll(
+      async () =>
+        (
+          await query<{ status: string }>(
+            "SELECT status FROM newsletter_jobs WHERE newsletter_id=$1",
+            [edition.id],
+          )
+        )[0]?.status,
+    )
+    .toBe("failed");
+  const result = (
+    await query<{ content: string | null; error: string }>(
+      "SELECT content,error FROM zone_newsletters WHERE id=$1",
+      [edition.id],
+    )
+  )[0];
+  expect(result.content).toBeNull();
+  expect(result.error).toContain("non configurée");
+  await expect
+    .poll(
+      async () =>
+        (
+          await query<{ lease: string | null }>(
+            "SELECT lease FROM automation_state WHERE id='runner'",
+          )
+        )[0]?.lease,
+    )
+    .toBeNull();
 });

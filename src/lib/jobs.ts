@@ -11,14 +11,17 @@ import { OpenAIDiscovery } from "./openai-discovery";
 import { referenceNow } from "./clock";
 
 type Job = { id: string; newsletter_id: string; attempt: number };
-export async function processOne(provider?: DiscoveryProvider) {
+export async function processOne(
+  provider?: DiscoveryProvider,
+  newsletterId?: string,
+) {
   const now = Date.now();
   const maxAttempts = Math.max(
     1,
     Math.min(Number(process.env.PREPARATION_MAX_ATTEMPTS) || 3, 5),
   );
   await query(
-    "UPDATE zone_newsletters SET preparation_status='failed',error='Worker interrompu : reprises épuisées' WHERE id IN (SELECT newsletter_id FROM newsletter_jobs WHERE status='processing' AND locked_until<$1 AND attempt>=$2)",
+    "UPDATE zone_newsletters SET preparation_status='failed',error='Traitement interrompu : reprises épuisées' WHERE id IN (SELECT newsletter_id FROM newsletter_jobs WHERE status='processing' AND locked_until<$1 AND attempt>=$2)",
     [now, maxAttempts],
   );
   await query(
@@ -28,8 +31,8 @@ export async function processOne(provider?: DiscoveryProvider) {
   const lease = randomUUID();
   const job = (
     await query<Job>(
-      "UPDATE newsletter_jobs SET status='processing',attempt=attempt+1,lease=$1,locked_until=$2 WHERE id=(SELECT id FROM newsletter_jobs WHERE status='queued' AND run_after<=$3 ORDER BY created_at LIMIT 1) AND status='queued' RETURNING *",
-      [lease, now + 120_000, now],
+      "UPDATE newsletter_jobs SET status='processing',attempt=attempt+1,lease=$1,locked_until=$2 WHERE id=(SELECT id FROM newsletter_jobs WHERE status='queued' AND run_after<=$3 AND newsletter_id=COALESCE($4,newsletter_id) ORDER BY created_at LIMIT 1) AND status='queued' RETURNING *",
+      [lease, now + 180_000, now, newsletterId ?? null],
     )
   )[0];
   if (!job) return false;
@@ -120,9 +123,10 @@ export async function processOne(provider?: DiscoveryProvider) {
   }
   return true;
 }
-export async function schedule(now = new Date()) {
+export async function schedule(now = new Date(), deadline = Infinity) {
   let count = 0;
   for (const zone of await listZones()) {
+    if (Date.now() + 10000 >= deadline) break;
     const local = DateTime.fromJSDate(now, { zone: zone.timezone });
     // Prepare the preceding day, leaving room for human review. Also catch up on send day.
     const precedingDay = zone.send_day === 1 ? 7 : zone.send_day - 1;

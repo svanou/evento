@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
@@ -38,8 +38,22 @@ import {
 } from "@/lib/store";
 import { getZone, listZones, saveZone } from "@/lib/zones";
 import { renderEmail } from "@/lib/email";
-import { broadcast, sendConfirmation } from "@/lib/delivery";
+import { sendConfirmation } from "@/lib/delivery";
 import { mailReadiness, requireRecipient } from "@/lib/mail-transport";
+import { automationStatus, runAutomation } from "@/lib/automation";
+import { queueBroadcast } from "@/lib/dispatch";
+export const maxDuration = 300;
+function startTasks(newsletterId?: string) {
+  after(async () => {
+    try {
+      await runAutomation({ source: "admin", newsletterId });
+    } catch {
+      console.error(
+        "[Evento] Traitement interrompu : consulter la configuration et les tâches dans l’administration.",
+      );
+    }
+  });
+}
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const cookieOptions = () => ({
@@ -269,6 +283,7 @@ async function handle(req: NextRequest) {
             "SELECT * FROM newsletter_audit ORDER BY created_at DESC LIMIT 100",
           ),
           configuration: {
+            automation: await automationStatus(),
             email: mailReadiness(),
             research: {
               keyConfigured: !!process.env.OPENAI_API_KEY,
@@ -276,6 +291,11 @@ async function handle(req: NextRequest) {
             },
           },
         });
+      if (path === "admin/tasks/run" && req.method === "POST") {
+        await rateLimit(`tasks:${actor}`, 20, 60000);
+        startTasks();
+        return NextResponse.json({ queued: true }, { status: 202 });
+      }
       if (path === "admin/prepare" && req.method === "POST") {
         const input = z
           .object({
@@ -284,12 +304,12 @@ async function handle(req: NextRequest) {
           })
           .parse(await body(req));
         await rateLimit(`prepare:${input.zone}`, 10, 3600_000);
-        return NextResponse.json({
-          edition: await enqueue(
-            input.zone,
-            input.date ? new Date(input.date) : undefined,
-          ),
-        });
+        const edition = await enqueue(
+          input.zone,
+          input.date ? new Date(input.date) : undefined,
+        );
+        startTasks(edition.id);
+        return NextResponse.json({ edition, queued: true }, { status: 202 });
       }
       if (path === "admin/zones" && ["POST", "PATCH"].includes(req.method))
         return NextResponse.json({
@@ -356,8 +376,15 @@ async function handle(req: NextRequest) {
           await scheduleNewsletter(id, input.revision, input.at, actor);
         }
         if (op === "cancel") await cancelSchedule(id, actor);
-        if (op === "retry") await retryPreparation(id);
-        if (op === "send") return NextResponse.json(await broadcast(id));
+        if (op === "retry") {
+          await retryPreparation(id);
+          startTasks(id);
+        }
+        if (op === "send") {
+          const result = await queueBroadcast(id);
+          startTasks();
+          return NextResponse.json(result, { status: 202 });
+        }
         return NextResponse.json({ ok: true });
       }
     }

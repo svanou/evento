@@ -26,8 +26,13 @@ export function requireRecipient(email: string) {
     throw new Error("Destinataire absent de la liste de test autorisée");
 }
 export class ResendTransport implements MailTransport {
+  private lastStarted = 0;
   async send(mail: Mail, idempotencyKey: string) {
     requireRecipient(mail.to);
+    // Batches reuse this transport and send sequentially, below two requests/sec.
+    const delay = 600 - (Date.now() - this.lastStarted);
+    if (delay > 0) await new Promise((resolve) => setTimeout(resolve, delay));
+    this.lastStarted = Date.now();
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       signal: AbortSignal.timeout(20000),

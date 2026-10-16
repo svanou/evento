@@ -24,6 +24,15 @@ it("applique la migration PostgreSQL, refuse les accès clients et active réell
         "utf8",
       ),
     );
+    const tasksMigration = readFileSync(
+      new URL("../supabase/migrations/003_vercel_tasks.sql", import.meta.url),
+      "utf8",
+    );
+    await db.exec(tasksMigration);
+    await db.exec(tasksMigration);
+    expect(
+      (await db.query("SELECT * FROM automation_state")).rows,
+    ).toHaveLength(1);
     expect(
       (await db.query("SELECT * FROM newsletter_zones")).rows,
     ).toHaveLength(1);
@@ -40,7 +49,7 @@ it("applique la migration PostgreSQL, refuse les accès clients et active réell
     }>(
       "SELECT relname,relrowsecurity FROM pg_class WHERE relnamespace='public'::regnamespace AND relkind='r'",
     );
-    expect(enabled.rows).toHaveLength(23);
+    expect(enabled.rows).toHaveLength(24);
     expect(enabled.rows.every((t) => t.relrowsecurity)).toBe(true);
     await db.exec("SET ROLE anon");
     await expect(db.query("SELECT * FROM profiles")).rejects.toThrow(

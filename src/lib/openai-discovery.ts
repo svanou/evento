@@ -56,7 +56,7 @@ export class OpenAIDiscovery implements DiscoveryProvider {
   ) {
     if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
       throw new Error(
-        "Recherche réelle non configurée : OPENAI_API_KEY et OPENAI_MODEL requis côté worker.",
+        "Recherche réelle non configurée : OPENAI_API_KEY et OPENAI_MODEL requis dans les variables serveur (Vercel en production).",
       );
     if (!sources.length)
       throw new Error("Ajoutez au moins une source active à cette zone.");
