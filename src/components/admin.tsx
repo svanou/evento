@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { DateTime } from "luxon";
 import {
@@ -173,6 +174,7 @@ export function Admin() {
           <button className="button primary" disabled={busy}>
             Ouvrir l’administration →
           </button>
+          <Link href="/admin/forgot-password">Mot de passe oublié ?</Link>
           <small>
             Connexion Supabase Auth. Un accès local distinct peut être configuré
             pour le développement.
