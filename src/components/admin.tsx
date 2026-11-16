@@ -10,8 +10,11 @@ import {
   type Content,
   type Edit,
   defaultSendAt,
+  MAX_NEWSLETTER_EVENTS,
 } from "@/lib/domain";
+import type { SponsorInquiry } from "@/lib/community";
 type AdminData = {
+  sponsorInquiries: SponsorInquiry[];
   zones: Zone[];
   editions: Newsletter[];
   sources: Source[];
@@ -74,7 +77,7 @@ export function Admin() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState<
-    "newsletters" | "zones" | "sources" | "subscribers"
+    "newsletters" | "zones" | "sources" | "subscribers" | "partners"
   >("newsletters");
   const [zoneId, setZoneId] = useState("pays-de-gex");
   const [selected, setSelected] = useState("");
@@ -210,6 +213,7 @@ export function Admin() {
             ["zones", "Zones"],
             ["sources", "Sources"],
             ["subscribers", "Abonnés"],
+            ["partners", "Partenariats"],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -478,6 +482,45 @@ export function Admin() {
           busy={busy}
         />
       )}
+      {tab === "partners" && zone && (
+        <section className="review-panel">
+          <h2>Propositions de partenariat · {zone.name}</h2>
+          <p>
+            Demandes reçues depuis la page de cette zone. Aucun email
+            automatique n’est envoyé.
+          </p>
+          {data.sponsorInquiries
+            .filter((s) => s.zone === zone.id)
+            .map((s) => (
+              <article key={s.id} className="article-editor">
+                <h3>{s.name}</h3>
+                <p>{s.email}</p>
+                <p style={{ whiteSpace: "pre-wrap" }}>{s.message}</p>
+                <small>
+                  {DateTime.fromMillis(Number(s.created_at)).toFormat(
+                    "dd/LL/yyyy HH:mm",
+                  )}
+                </small>
+                <button
+                  className="text-button"
+                  disabled={busy}
+                  onClick={() =>
+                    request(
+                      "partenariats",
+                      { id: s.id, zone: zone.id },
+                      "DELETE",
+                    )
+                  }
+                >
+                  Supprimer cette demande
+                </button>
+              </article>
+            ))}
+          {!data.sponsorInquiries.some((s) => s.zone === zone.id) && (
+            <p>Aucune proposition pour le moment.</p>
+          )}
+        </section>
+      )}
       {tab === "subscribers" && (
         <div className="review-panel">
           <h2>Abonnés · {zone?.name}</h2>
@@ -573,6 +616,37 @@ function EditionEditor({
   const contentFrozen = frozen || edition.dispatch_started_at != null;
   return (
     <>
+      <div className="calendar-publication">
+        <strong>Calendrier public · {zone.name}</strong>
+        <p>
+          {edition.calendar_revision === edition.revision
+            ? "Cette version est visible dans le calendrier de la zone."
+            : "Cette version n’est pas publiée dans le calendrier. Les modifications devront être republiées."}
+        </p>
+        <div className="row-actions">
+          <button
+            className="button secondary"
+            disabled={busy || dirty || !content.articles.length}
+            onClick={() =>
+              request(`newsletters/${edition.id}/calendar`, {
+                revision: edition.revision,
+                published: edition.calendar_revision !== edition.revision,
+              })
+            }
+          >
+            {edition.calendar_revision === edition.revision
+              ? "Retirer du calendrier"
+              : "Publier au calendrier"}
+          </button>
+          <Link href={`/agenda-${zone.id}/calendrier`} target="_blank">
+            Voir le calendrier ↗
+          </Link>
+        </div>
+        <small>
+          Publication sur le site uniquement. Aucun envoi d’email. Enregistrez
+          vos modifications avant de publier.
+        </small>
+      </div>
       <div className="metrics">
         <span>Version {edition.revision}</span>
         <span>{content.metrics.calls} appel(s) API</span>
@@ -609,7 +683,7 @@ function EditionEditor({
           />
         </label>
         <fieldset disabled={contentFrozen}>
-          <legend>Sorties retenues · maximum 5</legend>
+          <legend>Sorties retenues · maximum {MAX_NEWSLETTER_EVENTS}</legend>
           {edit.articles.map((a, index) => {
             const facts = content.reviews.find(
               (r) => r.candidate.id === a.id,
@@ -720,7 +794,10 @@ function EditionEditor({
                   <button
                     type="button"
                     className="text-button"
-                    disabled={contentFrozen}
+                    disabled={
+                      contentFrozen ||
+                      edit.articles.length >= MAX_NEWSLETTER_EVENTS
+                    }
                     onClick={() =>
                       change({
                         ...edit,
@@ -1156,7 +1233,14 @@ function SourcesPanel({
   request: Request;
   busy: boolean;
 }) {
-  const empty = { name: "", url: "", notes: "", enabled: true };
+  const empty = {
+    name: "",
+    url: "",
+    notes: "",
+    description: "",
+    visual: "village" as NonNullable<Source["visual"]>,
+    enabled: true,
+  };
   const [form, setForm] = useState(empty);
   const [id, setId] = useState<string | null>(null);
   return (
@@ -1182,12 +1266,16 @@ function SourcesPanel({
                 name: s.name,
                 url: s.url,
                 notes: s.notes,
+                description: s.description || "",
+                visual: s.visual || "village",
                 enabled: !!s.enabled,
               });
             }}
           >
             {s.name}
-            <small>{s.enabled ? "Active" : "Inactive"}</small>
+            <small>
+              {zone.name} · {s.enabled ? "Active" : "Inactive"}
+            </small>
           </button>
         ))}
       </aside>
@@ -1203,6 +1291,37 @@ function SourcesPanel({
         }}
       >
         <h2>{id ? "Modifier la source" : "Nouvelle source"}</h2>
+        <p>
+          Zone rattachée : <strong>{zone.name}</strong>. Cette source alimente
+          uniquement la veille et la page de cette zone. Utilisez « Zone de
+          travail » pour gérer une autre zone.
+        </p>
+        <label>
+          Description publique
+          <textarea
+            rows={3}
+            maxLength={500}
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+          />
+        </label>
+        <label>
+          Illustration de la source
+          <select
+            value={form.visual}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                visual: e.target.value as NonNullable<Source["visual"]>,
+              })
+            }
+          >
+            <option value="village">Vie locale</option>
+            <option value="nature">Nature et paysages</option>
+            <option value="culture">Culture et patrimoine</option>
+            <option value="gourmand">Marchés et gastronomie</option>
+          </select>
+        </label>
         <label>
           Nom
           <input
@@ -1222,7 +1341,7 @@ function SourcesPanel({
           />
         </label>
         <label>
-          Notes de suivi
+          Notes de suivi (privées)
           <textarea
             rows={4}
             value={form.notes}

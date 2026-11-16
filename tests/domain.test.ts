@@ -74,7 +74,7 @@ it("écarte les doublons, événements passés, contradictions et autres zones",
     4,
   );
 });
-it("ne remplit pas artificiellement cinq places et n’invente pas les inconnues", () => {
+it("ne remplit pas artificiellement la sélection et n’invente pas les inconnues", () => {
   const content = buildEdition(testZone, weekend, [candidate()], now);
   const email = renderEmail(testZone, content, links);
   expect(content.articles).toHaveLength(1);

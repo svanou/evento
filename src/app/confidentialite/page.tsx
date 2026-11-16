@@ -33,6 +33,16 @@ export default function Privacy() {
         données individuelles des lecteurs ne sont pas transmises aux
         annonceurs.
       </p>
+      <h2>Propositions de partenariat</h2>
+      <p>
+        Le formulaire conserve le nom de votre établissement, votre email
+        professionnel, votre message, la zone choisie et la date de la demande.
+        Ces informations sont consultables uniquement par l’équipe dans
+        l’administration pour étudier votre proposition et vous recontacter. Ce
+        formulaire ne vous abonne pas à la newsletter et ne déclenche aucun
+        paiement. L’équipe peut supprimer une demande depuis son tableau de
+        bord.
+      </p>
       <h2>Avant l’ouverture des inscriptions</h2>
       <p>
         Le responsable de traitement, les durées de conservation et la gestion

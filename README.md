@@ -1,6 +1,6 @@
 # Evento
 
-Newsletter gratuite de sorties locales, financée par un encart partenaire clairement identifié. Une édition commune par zone et par week-end, jusqu’à cinq sorties. Première zone : **Pays de Gex**. Les zones, sources et éditions se gèrent dans `/admin`.
+Newsletter gratuite de sorties locales, financée par un encart partenaire clairement identifié. Une édition commune par zone et par week-end, jusqu’à douze sorties. Première zone : **Pays de Gex**. Les zones, sources et éditions se gèrent dans `/admin`.
 
 **Aucun événement de démonstration n’est chargé par l’application.** Sans recherche configurée, la préparation échoue avec une erreur visible. Une recherche sans résultat fiable produit une édition vide, impossible à approuver et relançable après correction des sources. Les données artificielles existent uniquement dans les tests isolés.
 
@@ -46,7 +46,7 @@ Les domaines recherchés sont limités aux sources actives. Une URL de preuve do
 
 Ces contrôles ne certifient pas la fidélité de chaque assertion du modèle : **la relecture des sources par l’éditeur reste nécessaire avant approbation**. Les pages et PDF sont traités comme des données non fiables, jamais des instructions. Aucun contournement de site inaccessible. Le projet ne télécharge pas lui-même des URLs arbitraires ; le contrôle des URLs n’est pas un mécanisme SSRF complet pour un futur crawler.
 
-Une requête Responses par tentative, sortie limitée à 6 000 tokens, délai de 45 secondes par défaut (90 maximum), trois tentatives par défaut (cinq maximum). Le nombre de recherches internes à cette requête n’a pas de plafond contractuel dans cette intégration. Tokens et appels d’outil retournés sont conservés ; coûts mesurés et estimés restent « inconnus ». **Un plafond monétaire n’est pas implémenté** : définir un budget côté fournisseur avant l’activation payante.
+Une requête Responses par tentative, sortie limitée à 12 000 tokens, délai de 45 secondes par défaut (90 maximum), trois tentatives par défaut (cinq maximum). Le nombre de recherches internes à cette requête n’a pas de plafond contractuel dans cette intégration. Tokens et appels d’outil retournés sont conservés ; coûts mesurés et estimés restent « inconnus ». **Un plafond monétaire n’est pas implémenté** : définir un budget côté fournisseur avant l’activation payante.
 
 ## Emails et programmation
 
@@ -114,3 +114,12 @@ npm run test:e2e
 Les tests métier utilisent des bases temporaires et des fournisseurs injectés en mémoire. PGlite vérifie les trois migrations, la conservation de l’existant et la RLS sans projet distant. Playwright démarre son serveur sur le port 3100 avec une base distincte `.data/e2e-*`, sans worker ni fournisseur externe ; ses données de test n’entrent jamais dans la base du site. Chromium : `/usr/bin/chromium`, ou définir `PLAYWRIGHT_CHROMIUM_PATH`.
 
 Principaux modules : `zones.ts` (zones dynamiques), `store.ts` (abonnements/éditions), `jobs.ts` (préparation), `openai-discovery.ts` (recherche), `pipeline.ts` (sélection), `automation.ts` (exécution Vercel), `dispatch.ts` (lots durables), `delivery.ts` (livraisons), `mail-transport.ts` (fournisseur interchangeable), `email.ts` (rendu), et `src/components/admin.tsx` (gestion éditoriale).
+
+
+### Pages locales et calendrier
+
+Chaque `/agenda-<zone>` présente uniquement les sources actives de sa zone, avec description publique et illustration éditoriale. Les notes de suivi restent privées. Les sources conservent leur clé étrangère vers `newsletter_zones` ; ajouter le même agenda à deux zones crée deux rattachements distincts.
+
+Le calendrier `/agenda-<zone>/calendrier?mois=YYYY-MM` affiche uniquement les sélections explicitement publiées via **Publier au calendrier** dans l’administration. La publication exige des sorties vérifiées et des sources actives de cette zone. Toute modification de l’édition masque la version publique jusqu’à republication. La publication et le retrait du calendrier ne programment ni n’envoient aucun email.
+
+Le formulaire partenaires de chaque zone enregistre une demande privée dans `sponsor_inquiries`, visible et supprimable sous **Partenariats**. Il ne crée pas d’abonnement ni de paiement et n’envoie aucun message. Appliquer les migrations dans l’ordre, notamment `003_vercel_tasks.sql` puis la migration `*_zone_calendar_sources.sql`, avant de déployer ces pages.

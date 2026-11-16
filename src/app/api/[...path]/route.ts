@@ -41,6 +41,7 @@ import { renderEmail } from "@/lib/email";
 import { sendConfirmation } from "@/lib/delivery";
 import { mailReadiness, requireRecipient } from "@/lib/mail-transport";
 import { automationStatus, runAutomation } from "@/lib/automation";
+import { publishCalendar, saveSponsorInquiry } from "@/lib/community";
 import { queueBroadcast } from "@/lib/dispatch";
 export const maxDuration = 300;
 function startTasks(newsletterId?: string) {
@@ -100,6 +101,11 @@ async function handle(req: NextRequest) {
         zones: await listZones(),
         registrationOpen: Object.values(mailReadiness()).every(Boolean),
       });
+    if (path === "partenariats" && req.method === "POST") {
+      await rateLimit("sponsor-inquiries-global", 30, 3600_000);
+      await saveSponsorInquiry(await body(req));
+      return NextResponse.json({ ok: true }, { status: 201 });
+    }
     if (path === "signup" && req.method === "POST") {
       await rateLimit("signup-global", 100, 3600_000);
       const input = signupSchema.parse(await body(req));
@@ -264,6 +270,9 @@ async function handle(req: NextRequest) {
           editions: await query(
             "SELECT * FROM zone_newsletters ORDER BY weekend DESC,created_at DESC",
           ),
+          sponsorInquiries: await query(
+            "SELECT * FROM sponsor_inquiries ORDER BY created_at DESC LIMIT 500",
+          ),
           subscribers: await query(
             "SELECT id,email,zone,confirmed_at,unsubscribed_at,created_at FROM subscribers ORDER BY created_at DESC",
           ),
@@ -291,6 +300,16 @@ async function handle(req: NextRequest) {
             },
           },
         });
+      if (path === "admin/partenariats" && req.method === "DELETE") {
+        const input = z
+          .object({ id: z.string(), zone: z.string() })
+          .parse(await body(req));
+        await query("DELETE FROM sponsor_inquiries WHERE id=$1 AND zone=$2", [
+          input.id,
+          input.zone,
+        ]);
+        return NextResponse.json({ ok: true });
+      }
       if (path === "admin/tasks/run" && req.method === "POST") {
         await rateLimit(`tasks:${actor}`, 20, 60000);
         startTasks();
@@ -327,7 +346,7 @@ async function handle(req: NextRequest) {
         if (req.method === "PATCH") {
           if (!input.id) throw new Error("Source introuvable");
           const changed = await query(
-            "UPDATE newsletter_sources SET name=$1,url=$2,enabled=$3,notes=$4 WHERE id=$5 AND zone=$6 RETURNING id",
+            "UPDATE newsletter_sources SET name=$1,url=$2,enabled=$3,notes=$4,description=$7,visual=$8 WHERE id=$5 AND zone=$6 RETURNING id",
             [
               input.source.name,
               input.source.url,
@@ -335,12 +354,14 @@ async function handle(req: NextRequest) {
               input.source.notes,
               input.id,
               input.zone,
+              input.source.description,
+              input.source.visual,
             ],
           );
           if (!changed.length) throw new Error("Source introuvable");
         } else
           await query(
-            "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)",
+            "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,created_at,description,visual) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
             [
               randomUUID(),
               input.zone,
@@ -349,15 +370,26 @@ async function handle(req: NextRequest) {
               input.source.enabled ? 1 : 0,
               input.source.notes,
               Date.now(),
+              input.source.description,
+              input.source.visual,
             ],
           );
         return NextResponse.json({ ok: true });
       }
       const action = path.match(
-        /^admin\/newsletters\/([^/]+)\/(edit|approve|schedule|cancel|retry|send)$/,
+        /^admin\/newsletters\/([^/]+)\/(edit|approve|schedule|cancel|retry|send|calendar)$/,
       );
       if (action && req.method === "POST") {
         const [, id, op] = action;
+        if (op === "calendar") {
+          const input = z
+            .object({
+              revision: z.number().int().positive(),
+              published: z.boolean(),
+            })
+            .parse(await body(req));
+          await publishCalendar(id, input.revision, input.published, actor);
+        }
         if (op === "edit")
           await editNewsletter(id, editSchema.parse(await body(req)), actor);
         if (op === "approve") {
