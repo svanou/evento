@@ -1,0 +1,4 @@
+ALTER TABLE public.newsletter_sources
+  ADD COLUMN IF NOT EXISTS source_kind TEXT NOT NULL DEFAULT 'agenda',
+  ADD COLUMN IF NOT EXISTS logo_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS logo_background TEXT NOT NULL DEFAULT 'light';

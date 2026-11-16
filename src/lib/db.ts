@@ -1,10 +1,10 @@
-import { mkdirSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
 // A runtime TLS certificate must not become a watched build dependency.
-const { readFileSync } = process.getBuiltinModule("node:fs");
+const { readFileSync, mkdirSync } = process.getBuiltinModule("node:fs");
 
+import { communitySchema, communityColumns } from "./community-schema";
 import { automationSchema } from "./automation-schema";
 import { newsletterSchema } from "./newsletter-schema";
 import {
@@ -46,6 +46,17 @@ function local(): DatabaseSync {
     sqlite.exec(schema);
     sqlite.exec(newsletterSchema);
     sqlite.exec(automationSchema);
+    sqlite.exec(communitySchema);
+    for (const [table, columns] of Object.entries(communityColumns)) {
+      const existing = sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
+        name: string;
+      }[];
+      for (const [column, definition] of Object.entries(columns))
+        if (!existing.some((c) => c.name === column))
+          sqlite.exec(
+            `ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`,
+          );
+    }
     if (
       !(
         sqlite.prepare("PRAGMA table_info(zone_newsletters)").all() as {

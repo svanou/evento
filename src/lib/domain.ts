@@ -1,6 +1,14 @@
 import { z } from "zod";
 import { DateTime } from "luxon";
 
+export const MAX_NEWSLETTER_EVENTS = 12;
+export const sourceVisualSchema = z.enum([
+  "village",
+  "nature",
+  "culture",
+  "gourmand",
+]);
+
 export type Zone = {
   id: string;
   name: string;
@@ -26,7 +34,7 @@ export const zoneSchema = z
     currency: z.string().regex(/^[A-Z]{3}$/),
     language: z.literal("fr"),
     status: z.enum(["draft", "active"]),
-    send_day: z.number().int().min(1).max(5),
+    send_day: z.number().int().min(1).max(MAX_NEWSLETTER_EVENTS),
     send_hour: z.number().int().min(0).max(23),
   })
   .strict();
@@ -164,6 +172,8 @@ export type Content = {
   };
 };
 export type Newsletter = {
+  calendar_revision?: number | null;
+  calendar_published_at?: number | null;
   id: string;
   zone: string;
   weekend: string;
@@ -194,7 +204,7 @@ export const editSchema = z
           })
           .strict(),
       )
-      .max(5)
+      .max(MAX_NEWSLETTER_EVENTS)
       .refine(
         (a) => new Set(a.map((i) => i.id)).size === a.length,
         "Proposition dupliquée",
@@ -204,6 +214,11 @@ export const editSchema = z
   .strict();
 export type Edit = z.infer<typeof editSchema>;
 export type Source = {
+  source_kind?: "agenda" | "association" | "lieu" | "instagram" | "annuaire";
+  logo_url?: string;
+  logo_background?: "light" | "dark";
+  description?: string;
+  visual?: z.infer<typeof sourceVisualSchema>;
   id: string;
   zone: string;
   name: string;
@@ -217,6 +232,13 @@ export const sourceSchema = z
     name: z.string().trim().min(1).max(150),
     url: httpsUrl,
     notes: z.string().max(1000),
+    description: z.string().trim().max(500).default(""),
+    visual: sourceVisualSchema.default("village"),
+    source_kind: z
+      .enum(["agenda", "association", "lieu", "instagram", "annuaire"])
+      .default("agenda"),
+    logo_url: z.union([z.literal(""), httpsUrl]).default(""),
+    logo_background: z.enum(["light", "dark"]).default("light"),
     enabled: z.boolean(),
   })
   .strict();

@@ -1,6 +1,7 @@
 import { DateTime } from "luxon";
 import {
   candidateSchema,
+  MAX_NEWSLETTER_EVENTS,
   type Candidate,
   type Content,
   type Weekend,
@@ -63,9 +64,11 @@ export function buildEdition(
   });
   let count = 0;
   for (const review of reviews)
-    if (review.decision === "included" && ++count > 5) {
+    if (review.decision === "included" && ++count > MAX_NEWSLETTER_EVENTS) {
       review.decision = "excluded";
-      review.reasons.push("Limite éditoriale de cinq sorties");
+      review.reasons.push(
+        `Limite éditoriale de ${MAX_NEWSLETTER_EVENTS} sorties`,
+      );
     }
   return {
     subject: `${zone.name} : on fait quoi ce week-end ?`,

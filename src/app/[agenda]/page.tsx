@@ -1,28 +1,7 @@
-import { notFound } from "next/navigation";
 import { ZoneLanding } from "@/components/zone-landing";
-import { getZone } from "@/lib/zones";
-import { databaseSetupRequired } from "@/lib/deployment";
-import { cache } from "react";
+import { zoneFor } from "@/lib/public-zone";
+import { publicSources } from "@/lib/community";
 export const dynamic = "force-dynamic";
-const zoneFor = cache(async (agenda: string) => {
-  if (!agenda.startsWith("agenda-")) notFound();
-  if (databaseSetupRequired()) {
-    console.error(
-      "[Evento: DATABASE_URL_MISSING] Configurer DATABASE_URL sur Vercel, appliquer les migrations Supabase, puis redéployer.",
-    );
-    return null;
-  }
-  try {
-    return await getZone(agenda.slice(7));
-  } catch (e) {
-    if (
-      e instanceof Error &&
-      e.message === "Cette zone n’est pas encore ouverte."
-    )
-      notFound();
-    throw e;
-  }
-});
 export async function generateMetadata({
   params,
 }: {
@@ -66,5 +45,12 @@ export default async function Agenda({
         </a>
       </section>
     );
-  return <ZoneLanding id={zone.id} name={zone.name} day={zone.send_day} />;
+  return (
+    <ZoneLanding
+      id={zone.id}
+      name={zone.name}
+      day={zone.send_day}
+      sources={await publicSources(zone.id)}
+    />
+  );
 }

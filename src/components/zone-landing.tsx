@@ -1,14 +1,19 @@
 import Link from "next/link";
 import { Landscape } from "./shell";
+import { SourceDirectory } from "./source-directory";
+import { SponsorInquiryForm } from "./sponsor-inquiry";
+import type { PublicSource } from "@/lib/community";
 const days = ["", "lundi", "mardi", "mercredi", "jeudi", "vendredi"];
 export function ZoneLanding({
   id = "pays-de-gex",
   name = "Pays de Gex",
   day = 4,
+  sources = [],
 }: {
   id?: string;
   name?: string;
   day?: number;
+  sources?: PublicSource[];
 }) {
   return (
     <>
@@ -25,13 +30,20 @@ export function ZoneLanding({
           </h1>
           <p className="hero-description">
             Chaque {days[day]}, une sélection de sorties dans votre coin. Des
-            idées issues des agendas locaux, selon les sorties disponibles.
+            idées repérées grâce à notre veille active des agendas locaux, des
+            mairies et des lieux culturels.
             <br />
             Vous n’avez plus qu’à choisir.
           </p>
           <div className="hero-actions">
             <Link href={`/inscription?zone=${id}`} className="button primary">
               Recevoir la newsletter gratuite <span>→</span>
+            </Link>
+            <Link
+              href={`/agenda-${id}/calendrier`}
+              className="calendar-hero-link"
+            >
+              Explorer le calendrier des événements ↗
             </Link>
             <span className="small-note">
               Un email par semaine. Votre zone, tout simplement.
@@ -129,21 +141,89 @@ export function ZoneLanding({
           </article>
         </div>
       </section>
-      <section className="pricing">
-        <div>
-          <p className="eyebrow">GRATUIT POUR LES LECTEURS</p>
-          <h2>Un média local, soutenu localement.</h2>
+      <section className="source-section" id="sources">
+        <div className="section-intro">
+          <div>
+            <p className="eyebrow">LES YEUX OUVERTS SUR VOTRE COIN</p>
+            <h2>
+              Une veille active.
+              <br />
+              Des sources à découvrir.
+            </h2>
+          </div>
           <p>
-            Des partenaires locaux pourront financer la newsletter.
+            Agendas municipaux, associations, lieux culturels et Instagram :
             <br />
-            Leur encart sera toujours identifié{" "}
-            <strong>« Publicité — partenaire local »</strong>, à part de la
-            sélection.
+            notre point de départ, c’est la vie locale.
           </p>
         </div>
-        <Link href={`/inscription?zone=${id}`} className="button light">
-          Rejoindre la newsletter →
+        <div className="watch-method">
+          <p>
+            Pour préparer chaque édition, nous croisons les agendas locaux de la
+            zone {name}, repérons les sorties et vérifions leurs informations
+            pratiques. Les propositions incertaines sont mises de côté pour être
+            contrôlées.
+          </p>
+          <p>
+            Les informations peuvent évoluer : chaque événement renvoie à sa
+            source et indique sa date de consultation. Cette sélection ne
+            prétend pas couvrir tous les événements.
+          </p>
+        </div>
+        <SourceDirectory sources={sources} zoneName={name} />
+      </section>
+      <section className="calendar-invite">
+        <div>
+          <p className="eyebrow">VOTRE PROCHAIN RENDEZ-VOUS</p>
+          <h2>
+            Et si on regardait
+            <br />
+            le calendrier ?
+          </h2>
+          <p>
+            Par date, par envie. Retrouvez les événements publiés dans votre
+            zone et leurs informations pratiques.
+          </p>
+        </div>
+        <Link className="button light" href={`/agenda-${id}/calendrier`}>
+          Voir les événements de {name} →
         </Link>
+      </section>
+      <section className="local-sponsors" id="partenaires">
+        <div className="sponsor-pitch">
+          <p className="eyebrow">
+            LA NEWSLETTER LOCALE · LES PARTENAIRES LOCAUX
+          </p>
+          <h2>
+            Votre activité fait
+            <br />
+            vivre le coin.
+            <br />
+            <em>Faisons-la connaître.</em>
+          </h2>
+          <p>
+            Un commerce, un restaurant, un lieu culturel ou une initiative à
+            faire découvrir ? Soutenez la newsletter {name} et présentez votre
+            activité dans un encart dédié.
+          </p>
+          <ul>
+            <li>Une présence dans la newsletter de votre zone.</li>
+            <li>Un message et un lien vers votre activité.</li>
+            <li>
+              Une collaboration définie ensemble, sans engagement via ce
+              formulaire.
+            </li>
+          </ul>
+          <div className="sponsor-transparency">
+            <strong>La confiance avant tout.</strong>
+            <p>
+              Chaque encart porte la mention « Publicité — partenaire local ».
+              Le sponsoring reste séparé de notre sélection de sorties. Aucune
+              donnée individuelle des lecteurs n’est partagée.
+            </p>
+          </div>
+        </div>
+        <SponsorInquiryForm zone={id} name={name} />
       </section>
     </>
   );

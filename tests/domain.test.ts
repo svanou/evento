@@ -74,7 +74,7 @@ it("écarte les doublons, événements passés, contradictions et autres zones",
     4,
   );
 });
-it("ne remplit pas artificiellement cinq places et n’invente pas les inconnues", () => {
+it("ne remplit pas artificiellement la sélection et n’invente pas les inconnues", () => {
   const content = buildEdition(testZone, weekend, [candidate()], now);
   const email = renderEmail(testZone, content, links);
   expect(content.articles).toHaveLength(1);
@@ -175,4 +175,24 @@ it("borne le temps d’un fournisseur qui ignore son signal", async () => {
   await expect(
     withDeadline(new Promise(() => {}), AbortSignal.timeout(20)),
   ).rejects.toThrow("Délai");
+});
+
+it("un compte social référencé n’autorise pas tous les comptes de sa plateforme", () => {
+  const source = {
+    id: "social",
+    zone: testZone.id,
+    name: "Association",
+    url: "https://www.instagram.com/association/",
+    enabled: 1,
+    notes: "",
+    created_at: 0,
+  };
+  const post = candidate({
+    sourceUrl: "https://www.instagram.com/p/other-account/",
+  });
+  expect(() =>
+    validateResearch({ candidates: [post] }, [post.sourceUrl], testZone, [
+      source,
+    ]),
+  ).toThrow("sources consultées");
 });
