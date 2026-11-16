@@ -214,6 +214,9 @@ export const editSchema = z
   .strict();
 export type Edit = z.infer<typeof editSchema>;
 export type Source = {
+  source_kind?: "agenda" | "association" | "lieu" | "instagram" | "annuaire";
+  logo_url?: string;
+  logo_background?: "light" | "dark";
   description?: string;
   visual?: z.infer<typeof sourceVisualSchema>;
   id: string;
@@ -231,6 +234,11 @@ export const sourceSchema = z
     notes: z.string().max(1000),
     description: z.string().trim().max(500).default(""),
     visual: sourceVisualSchema.default("village"),
+    source_kind: z
+      .enum(["agenda", "association", "lieu", "instagram", "annuaire"])
+      .default("agenda"),
+    logo_url: z.union([z.literal(""), httpsUrl]).default(""),
+    logo_background: z.enum(["light", "dark"]).default("light"),
     enabled: z.boolean(),
   })
   .strict();

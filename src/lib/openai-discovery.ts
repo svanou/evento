@@ -10,6 +10,7 @@ import {
   type Zone,
 } from "./domain";
 import { type DiscoveryProvider } from "./providers";
+import { isResearchSource } from "./source-display";
 const resultSchema = z
   .object({ candidates: z.array(candidateSchema).max(24) })
   .strict();
@@ -26,7 +27,7 @@ export function validateResearch(
 ): Candidate[] {
   const result = resultSchema.parse(raw);
   const domains = sources
-    .filter((s) => s.enabled === 1 && s.zone === zone.id)
+    .filter((s) => s.enabled === 1 && s.zone === zone.id && isResearchSource(s))
     .map((s) => new URL(s.url).hostname.replace(/^www\./, ""));
   const allowed = new Set(consulted.filter(safeSourceUrl).map(canonical));
   return result.candidates.map((candidate) => {
@@ -54,6 +55,9 @@ export class OpenAIDiscovery implements DiscoveryProvider {
     sources: Source[],
     signal: AbortSignal,
   ) {
+    sources = sources.filter(
+      (s) => s.enabled === 1 && s.zone === zone.id && isResearchSource(s),
+    );
     if (!process.env.OPENAI_API_KEY || !process.env.OPENAI_MODEL)
       throw new Error(
         "Recherche réelle non configurée : OPENAI_API_KEY et OPENAI_MODEL requis dans les variables serveur (Vercel en production).",

@@ -39,6 +39,26 @@ it("applique la migration PostgreSQL, refuse les accès clients et active réell
     );
     await db.exec(communitySQL);
     await db.exec(communitySQL);
+    const directorySQL = readFileSync(
+      new URL(
+        "../supabase/migrations/20261116165853_source_directory.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    );
+    await db.exec(directorySQL);
+    await db.exec(directorySQL);
+    expect(
+      (
+        await db.query(
+          "SELECT source_kind,logo_url,logo_background FROM newsletter_sources",
+        )
+      ).rows[0],
+    ).toEqual({
+      source_kind: "agenda",
+      logo_url: "",
+      logo_background: "light",
+    });
     expect(
       (await db.query("SELECT * FROM automation_state")).rows,
     ).toHaveLength(1);

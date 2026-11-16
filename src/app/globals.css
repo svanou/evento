@@ -1915,6 +1915,83 @@ blockquote {
   height: auto;
   aspect-ratio: 400/220;
 }
+.source-brand {
+  position: relative;
+}
+.source-brand .source-art {
+  height: 130px;
+  object-fit: cover;
+}
+.source-logo {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 104px;
+  height: 80px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  color: var(--green);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.source-brand .source-logo {
+  position: absolute;
+  bottom: -16px;
+  left: 24px;
+  box-shadow: 0 3px 12px #163c2410;
+}
+.source-logo-dark {
+  background: #183e36;
+  color: white;
+}
+.source-logo img {
+  position: absolute;
+  width: 88px;
+  height: 64px;
+  object-fit: contain;
+}
+.source-brand + .source-copy {
+  padding-top: 36px;
+}
+.source-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.source-controls label {
+  display: grid;
+  gap: 8px;
+  flex: 1 1 240px;
+  font-size: 13px;
+}
+.source-controls input,
+.source-controls select {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 14px;
+  background: white;
+  color: var(--green);
+  font: inherit;
+}
+.source-more {
+  margin-top: 24px;
+}
+.edition-option .source-logo {
+  width: 44px;
+  height: 36px;
+  float: left;
+  margin: 0 10px 6px 0;
+  border-radius: 6px;
+}
+.edition-option .source-logo img {
+  width: 36px;
+  height: 28px;
+}
 .source-copy {
   padding: 24px;
   display: flex;

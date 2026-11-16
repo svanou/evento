@@ -12,6 +12,8 @@ import {
   defaultSendAt,
   MAX_NEWSLETTER_EVENTS,
 } from "@/lib/domain";
+import { sourceKinds, type SourceKind } from "@/lib/source-display";
+import { SourceLogo } from "./source-directory";
 import type { SponsorInquiry } from "@/lib/community";
 type AdminData = {
   sponsorInquiries: SponsorInquiry[];
@@ -1239,6 +1241,9 @@ function SourcesPanel({
     notes: "",
     description: "",
     visual: "village" as NonNullable<Source["visual"]>,
+    source_kind: "agenda" as SourceKind,
+    logo_url: "",
+    logo_background: "light" as "light" | "dark",
     enabled: true,
   };
   const [form, setForm] = useState(empty);
@@ -1268,13 +1273,18 @@ function SourcesPanel({
                 notes: s.notes,
                 description: s.description || "",
                 visual: s.visual || "village",
+                source_kind: s.source_kind || "agenda",
+                logo_url: s.logo_url || "",
+                logo_background: s.logo_background || "light",
                 enabled: !!s.enabled,
               });
             }}
           >
+            <SourceLogo source={s} />
             {s.name}
             <small>
-              {zone.name} · {s.enabled ? "Active" : "Inactive"}
+              {zone.name} · {sourceKinds[s.source_kind || "agenda"]} ·{" "}
+              {s.enabled ? "Active" : "Inactive"}
             </small>
           </button>
         ))}
@@ -1306,6 +1316,45 @@ function SourcesPanel({
           />
         </label>
         <label>
+          Type de source
+          <select
+            value={form.source_kind}
+            onChange={(e) =>
+              setForm({ ...form, source_kind: e.target.value as SourceKind })
+            }
+          >
+            {Object.entries(sourceKinds).map(([value, label]) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          URL du logo (facultatif)
+          <input
+            type="url"
+            placeholder="https://…/logo.png"
+            value={form.logo_url}
+            onChange={(e) => setForm({ ...form, logo_url: e.target.value })}
+          />
+        </label>
+        <label>
+          Fond du logo
+          <select
+            value={form.logo_background}
+            onChange={(e) =>
+              setForm({
+                ...form,
+                logo_background: e.target.value as "light" | "dark",
+              })
+            }
+          >
+            <option value="light">Clair</option>
+            <option value="dark">Sombre (logo blanc)</option>
+          </select>
+        </label>
+        <label>
           Illustration de la source
           <select
             value={form.visual}
@@ -1331,7 +1380,7 @@ function SourcesPanel({
           />
         </label>
         <label>
-          Adresse de l’agenda
+          Adresse du site ou du compte
           <input
             type="url"
             required
@@ -1354,12 +1403,14 @@ function SourcesPanel({
             checked={form.enabled}
             onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
           />
-          Inclure ce domaine dans les recherches de la zone
+          Activer cette source pour la zone
         </label>
         <p className="small-note">
-          Agenda touristique, mairie, lieu culturel ou association. L’activation
-          autorise la recherche sur ce domaine ; elle ne certifie pas son
-          contenu ni une couverture exhaustive.
+          Les comptes Instagram et les annuaires servent au repérage manuel. Ils
+          ne déclenchent aucune surveillance automatique des publications.
+          Confirmez les événements sur une page de l’organisateur avant
+          publication. L’activation ne certifie pas le contenu ni une couverture
+          exhaustive.
         </p>
         <button className="button primary" disabled={busy}>
           Enregistrer la source

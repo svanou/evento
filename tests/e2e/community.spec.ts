@@ -46,6 +46,12 @@ test("sources par zone, calendrier publié et demande sponsor jusqu’au dashboa
   await query(
     "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,description,visual,created_at) VALUES('e2e-community','pays-de-gex','Agenda local de test','https://example.org',1,'NOTE PRIVÉE DU TEST','Une description publique de la veille.','culture',0)",
   );
+  await query(
+    "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,description,source_kind,logo_url,created_at) VALUES('e2e-social','pays-de-gex','Association Instagram test','https://www.instagram.com/association_test/',1,'PREUVE PRIVÉE','Actualités de notre association.','instagram','https://example.org/logo-test.png',0)",
+  );
+  await page.route("https://example.org/logo-test.png", (route) =>
+    route.abort(),
+  );
   await page.goto("/agenda-pays-de-gex");
   await expect(
     page.getByRole("heading", { name: /Une veille active/ }),
@@ -54,6 +60,23 @@ test("sources par zone, calendrier publié et demande sponsor jusqu’au dashboa
     page.getByText("Une description publique de la veille."),
   ).toBeVisible();
   await expect(page.getByText("NOTE PRIVÉE DU TEST")).toHaveCount(0);
+  await page.getByLabel("Type de source").selectOption("instagram");
+  await expect(
+    page.getByRole("link", { name: /Voir le compte Instagram/ }),
+  ).toHaveAttribute("href", "https://www.instagram.com/association_test/");
+  await page
+    .getByRole("heading", { name: "Association Instagram test" })
+    .scrollIntoViewIfNeeded();
+  await expect(
+    page.getByLabel("Initiales · Association Instagram test"),
+  ).toBeVisible();
+  await expect(page.getByText("PREUVE PRIVÉE")).toHaveCount(0);
+  await page.getByLabel("Rechercher une source").fill("introuvable");
+  await expect(
+    page.getByText("Aucune source pour cette recherche."),
+  ).toBeVisible();
+  await page.getByLabel("Rechercher une source").fill("");
+  await page.getByLabel("Type de source").selectOption("all");
   await page.getByLabel("Votre établissement").fill("Sponsor navigateur");
   await page.getByLabel("Email professionnel").fill("sponsor@example.test");
   await page
@@ -61,9 +84,9 @@ test("sources par zone, calendrier publié et demande sponsor jusqu’au dashboa
     .fill("Une proposition locale pour la newsletter.");
   await page.getByRole("checkbox").check();
   await page.getByRole("button", { name: /Proposer un partenariat/ }).click();
-  await expect(page.getByRole("status")).toContainText(
-    "Votre proposition est bien arrivée",
-  );
+  await expect(
+    page.getByRole("status").filter({ hasText: "Votre proposition" }),
+  ).toContainText("Votre proposition est bien arrivée");
   expect(
     (
       await request.post(`/api/admin/newsletters/${edition.id}/calendar`, {

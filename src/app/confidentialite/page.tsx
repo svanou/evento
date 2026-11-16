@@ -43,6 +43,14 @@ export default function Privacy() {
         paiement. L’équipe peut supprimer une demande depuis son tableau de
         bord.
       </p>
+      <h2>Logos et liens externes</h2>
+      <p>
+        Les logos sont chargés depuis les sites qui les hébergent. À défaut, une
+        icône de site peut être chargée via Google Favicons. Ces requêtes
+        transmettent votre adresse IP au service concerné, sans transmettre
+        votre email ni les données de votre abonnement. Aucun contenu Instagram
+        n’est intégré automatiquement : les liens ouvrent le compte concerné.
+      </p>
       <h2>Avant l’ouverture des inscriptions</h2>
       <p>
         Le responsable de traitement, les durées de conservation et la gestion

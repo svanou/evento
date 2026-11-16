@@ -12,16 +12,27 @@ import { audit, getNewsletter } from "./store";
 import { getZone } from "./zones";
 import { buildEdition } from "./pipeline";
 import { referenceNow } from "./clock";
+import { isResearchSource } from "./source-display";
 
 export type PublicSource = Pick<
   Source,
-  "id" | "zone" | "name" | "url" | "description" | "visual"
+  | "id"
+  | "zone"
+  | "name"
+  | "url"
+  | "description"
+  | "visual"
+  | "source_kind"
+  | "logo_url"
+  | "logo_background"
 >;
 export async function publicSources(zone: string): Promise<PublicSource[]> {
-  return query<PublicSource>(
-    "SELECT id,zone,name,url,description,visual FROM newsletter_sources WHERE zone=$1 AND enabled=1 ORDER BY name",
+  const rows = await query<PublicSource>(
+    "SELECT id,zone,name,url,description,visual,source_kind,logo_url,logo_background FROM newsletter_sources WHERE zone=$1 AND enabled=1 ORDER BY name",
     [zone],
   );
+  // node:sqlite returns null-prototype rows; React client props need plain objects.
+  return rows.map((row) => ({ ...row }));
 }
 function belongsToSources(candidate: Candidate, sources: PublicSource[]) {
   const host = new URL(candidate.sourceUrl).hostname.replace(/^www\./, "");
@@ -29,6 +40,7 @@ function belongsToSources(candidate: Candidate, sources: PublicSource[]) {
     const domain = new URL(s.url).hostname.replace(/^www\./, "");
     return (
       s.zone === candidate.zone &&
+      isResearchSource(s) &&
       (host === domain || host.endsWith(`.${domain}`))
     );
   });

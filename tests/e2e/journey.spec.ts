@@ -95,12 +95,23 @@ test("ajouter une zone, ses sources et sa page depuis le backend", async ({
   await page.getByRole("tab", { name: "Sources", exact: true }).click();
   await page.getByLabel("Nom", { exact: true }).fill("Source du test");
   await page
-    .getByLabel("Adresse de l’agenda")
+    .getByLabel("Adresse du site ou du compte")
     .fill("https://example.org/test-source");
+  await page.getByLabel("Type de source").selectOption("association");
+  await page
+    .getByLabel("URL du logo (facultatif)")
+    .fill("https://example.org/association-logo.png");
+  await page.getByLabel("Fond du logo").selectOption("dark");
   await page.getByRole("button", { name: "Enregistrer la source" }).click();
   await expect(
     page.getByRole("button", { name: /Source du test/ }),
   ).toBeVisible();
+  await page.getByRole("button", { name: /Source du test/ }).click();
+  await expect(page.getByLabel("Type de source")).toHaveValue("association");
+  await expect(page.getByLabel("URL du logo (facultatif)")).toHaveValue(
+    "https://example.org/association-logo.png",
+  );
+  await expect(page.getByLabel("Fond du logo")).toHaveValue("dark");
   await page.getByRole("tab", { name: "Zones", exact: true }).click();
   await page.getByRole("button", { name: /Zone du test navigateur/ }).click();
   await page.getByLabel("Statut", { exact: true }).selectOption("active");

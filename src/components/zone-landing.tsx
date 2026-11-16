@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Landscape } from "./shell";
-import { SourceArt } from "./source-art";
+import { SourceDirectory } from "./source-directory";
 import { SponsorInquiryForm } from "./sponsor-inquiry";
 import type { PublicSource } from "@/lib/community";
 const days = ["", "lundi", "mardi", "mercredi", "jeudi", "vendredi"];
@@ -152,15 +152,17 @@ export function ZoneLanding({
             </h2>
           </div>
           <p>
-            Agendas municipaux, lieux culturels, organisateurs :<br />
+            Agendas municipaux, associations, lieux culturels et Instagram :
+            <br />
             notre point de départ, c’est la vie locale.
           </p>
         </div>
         <div className="watch-method">
           <p>
-            Pour préparer chaque édition, nous croisons les agendas locaux de la zone {name},
-            repérons les sorties et vérifions leurs informations pratiques. Les
-            propositions incertaines sont mises de côté pour être contrôlées.
+            Pour préparer chaque édition, nous croisons les agendas locaux de la
+            zone {name}, repérons les sorties et vérifions leurs informations
+            pratiques. Les propositions incertaines sont mises de côté pour être
+            contrôlées.
           </p>
           <p>
             Les informations peuvent évoluer : chaque événement renvoie à sa
@@ -168,38 +170,7 @@ export function ZoneLanding({
             prétend pas couvrir tous les événements.
           </p>
         </div>
-        <div className="source-count">
-          <span className="status-dot" /> {sources.length} source
-          {sources.length === 1 ? "" : "s"} active
-          {sources.length === 1 ? "" : "s"} · {name}
-          <small>
-            Illustrations éditoriales · liens vers les sites officiels
-          </small>
-        </div>
-        <div className="source-grid">
-          {sources.map((source) => (
-            <article className="source-card" key={source.id}>
-              <SourceArt visual={source.visual} />
-              <div className="source-copy">
-                <span className="eyebrow">{name}</span>
-                <h3>{source.name}</h3>
-                <p>
-                  {source.description ||
-                    "Un agenda local pour repérer les rendez-vous et consulter les informations pratiques à la source."}
-                </p>
-                <a href={source.url} target="_blank" rel="noreferrer">
-                  Découvrir la source <span>↗</span>
-                </a>
-              </div>
-            </article>
-          ))}
-        </div>
-        {!sources.length && (
-          <p>
-            Les premières sources de cette zone seront présentées ici dès leur
-            activation.
-          </p>
-        )}
+        <SourceDirectory sources={sources} zoneName={name} />
       </section>
       <section className="calendar-invite">
         <div>

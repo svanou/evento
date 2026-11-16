@@ -8,6 +8,9 @@ export const communityColumns = {
   newsletter_sources: {
     description: "TEXT NOT NULL DEFAULT ''",
     visual: "TEXT NOT NULL DEFAULT 'village'",
+    source_kind: "TEXT NOT NULL DEFAULT 'agenda'",
+    logo_url: "TEXT NOT NULL DEFAULT ''",
+    logo_background: "TEXT NOT NULL DEFAULT 'light'",
   },
   zone_newsletters: {
     calendar_revision: "INTEGER",

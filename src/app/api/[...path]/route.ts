@@ -346,7 +346,7 @@ async function handle(req: NextRequest) {
         if (req.method === "PATCH") {
           if (!input.id) throw new Error("Source introuvable");
           const changed = await query(
-            "UPDATE newsletter_sources SET name=$1,url=$2,enabled=$3,notes=$4,description=$7,visual=$8 WHERE id=$5 AND zone=$6 RETURNING id",
+            "UPDATE newsletter_sources SET name=$1,url=$2,enabled=$3,notes=$4,description=$7,visual=$8,source_kind=$9,logo_url=$10,logo_background=$11 WHERE id=$5 AND zone=$6 RETURNING id",
             [
               input.source.name,
               input.source.url,
@@ -356,12 +356,15 @@ async function handle(req: NextRequest) {
               input.zone,
               input.source.description,
               input.source.visual,
+              input.source.source_kind,
+              input.source.logo_url,
+              input.source.logo_background,
             ],
           );
           if (!changed.length) throw new Error("Source introuvable");
         } else
           await query(
-            "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,created_at,description,visual) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            "INSERT INTO newsletter_sources(id,zone,name,url,enabled,notes,created_at,description,visual,source_kind,logo_url,logo_background) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
             [
               randomUUID(),
               input.zone,
@@ -372,6 +375,9 @@ async function handle(req: NextRequest) {
               Date.now(),
               input.source.description,
               input.source.visual,
+              input.source.source_kind,
+              input.source.logo_url,
+              input.source.logo_background,
             ],
           );
         return NextResponse.json({ ok: true });
