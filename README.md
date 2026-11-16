@@ -77,6 +77,12 @@ La deuxième migration est additive : les anciens profils et éditions restent d
 
 Configurer côté serveur : `DATABASE_URL`, `SESSION_SECRET` aléatoire (32 caractères minimum), `APP_URL` égal à l’origine exacte du site, `ADMIN_AUTH_MODE=supabase`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` et `ADMIN_USER_IDS` (UUID autorisés). Garder TLS vérifié ; `PGSSLROOTCERT` permet de fournir la CA si nécessaire. Ne jamais coller les secrets dans le chat ou les committer.
 
+### Mot de passe administrateur oublié
+
+Depuis `/admin`, suivre **Mot de passe oublié ?**. L’email est envoyé par Supabase Auth ; configurer son service SMTP et ajouter exactement `https://<domaine>/admin/reset-password` dans **Authentication → URL Configuration → Redirect URLs**. Le domaine doit correspondre à `APP_URL`. Le modèle d’email de récupération doit conserver le lien Supabase `{{ .ConfirmationURL }}` (flux implicite).
+
+Le lien ouvre un formulaire de nouveau mot de passe (12 caractères minimum), puis invite à se reconnecter. Les jetons de récupération restent en mémoire et sont retirés de l’adresse dès l’ouverture. Un lien expiré ou déjà utilisé nécessite un nouvel email. La réinitialisation ne change pas la liste `ADMIN_USER_IDS` et n’est pas disponible en mode administrateur local. Les cookies administrateur déjà émis restent valides jusqu’à leur expiration habituelle (8 heures).
+
 **Vercel + Supabase suffisent : aucun service Railway ni worker permanent nécessaire.** Après les migrations :
 
 - Dans Vercel → Settings → Environment Variables → **Production**, configurer `OPENAI_API_KEY`, `OPENAI_MODEL`, et un `CRON_SECRET` aléatoire distinct d’au moins 32 caractères (génération locale possible : `openssl rand -hex 32`). Aucun de ces secrets ne doit porter le préfixe `NEXT_PUBLIC_`.
